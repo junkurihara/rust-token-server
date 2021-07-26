@@ -15,7 +15,7 @@ echo "init first"
 
 echo "run the server"
 ROCKET_ENV=production \
-ROCKET_ADDRESS=0.0.0.0 \
+ROCKET_ADDRESS="0.0.0.0" \
 ROCKET_PORT=8000 \
 /opt/token-server/sbin/rust-token-server run \
   --signing-algorithm ${SIGNING_ALGORITHM} \
