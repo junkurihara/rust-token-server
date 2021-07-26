@@ -5,16 +5,15 @@ echo "start token server"
 # read custom configuration
 source /opt/token-server/etc/.env
 
-# echo "doh-proxy: upstream dns server address: ${UPSTREAM_ADDR}:${UPSTREAM_PORT}"
-
 echo "init first"
-/opt/token-server/sbin/rust-token-server init \
+RUST_LOG=debug /opt/token-server/sbin/rust-token-server init \
   --admin-name ${ADMIN_NAME} \
   --admin-password ${ADMIN_PASSWORD} \
   --db-file-path /opt/token-server/etc/userdb.db
 
 echo "run the server"
-ROCKET_ENV=production \
+RUST_LOG=debug \
+ROCKET_ENV=development \
 ROCKET_ADDRESS="0.0.0.0" \
 ROCKET_PORT=8000 \
 /opt/token-server/sbin/rust-token-server run \
