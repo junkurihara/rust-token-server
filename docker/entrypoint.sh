@@ -12,7 +12,7 @@ source /opt/token-server/etc/.env
   --admin-password ${ADMIN_PASSWORD} \
   --db-file-path /opt/token-server/etc/userdb.db
 
-/opt/token-server/sbin/rust-token-server run \
+ROCKET_ENV=production /opt/token-server/sbin/rust-token-server run \
   --signing-algorithm ${SIGNING_ALGORITHM} \
   --signing-key-path /opt/token-server/etc/private_key.pem \
   --db-file-path /opt/token-server/etc/userdb.db
