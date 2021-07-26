@@ -1,4 +1,5 @@
-# rust-token-webapi
+# rust-token-server
+
 REST API server to handle JSON Web Token, written in Rust
 
 ## Usage
