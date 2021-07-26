@@ -1,0 +1,29 @@
+version: "3"
+services:
+  token-server:
+    image: jqtype/token-server:jwt-auth
+    container_name: token-server
+    build:
+      context: ./
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - 8000:8000/udp
+      - 8000:8000/tcp
+    volumes:
+      - ./.env:/opt/token-server/etc/.env
+      - ${SIGNING_KEY_PATH}:/opt/token-server/etc/private_key.pem
+      - ${DB_FILE_PATH}:/opt/token-server/etc/userdb.db
+    networks:
+      net-front:
+
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   container_name: watchtower
+  #   command: dnscrypt-server --interval 30
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  net-front:
+    external: true
