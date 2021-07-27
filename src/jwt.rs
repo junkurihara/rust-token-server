@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
+  // issuer: String, // like 'https://....' for IdToken
   issued_at: String,
   expires: String,
   id: String, // jwt itself is given here
@@ -94,17 +95,44 @@ pub enum JwtSigningKey {
 }
 
 impl JwtSigningKey {
-  pub fn new(validation_algorithm: &Algorithm, key_str: &str) -> Result<Self, Error> {
+  pub fn new(
+    validation_algorithm: &Algorithm,
+    key_str: &str,
+    with_key_id: bool,
+  ) -> Result<Self, Error> {
     let signing_key = match validation_algorithm {
-      Algorithm::HS256 => JwtSigningKey::HS256(HS256Key::from_bytes(key_str.as_ref())),
-      Algorithm::HS384 => JwtSigningKey::HS384(HS384Key::from_bytes(key_str.as_ref())),
-      Algorithm::HS512 => JwtSigningKey::HS512(HS512Key::from_bytes(key_str.as_ref())),
+      Algorithm::HS256 => {
+        let mut k = HS256Key::from_bytes(key_str.as_ref());
+        if with_key_id {
+          k.create_key_id();
+        };
+        JwtSigningKey::HS256(k)
+      }
+      Algorithm::HS384 => {
+        let mut k = HS384Key::from_bytes(key_str.as_ref());
+        if with_key_id {
+          k.create_key_id();
+        };
+        JwtSigningKey::HS384(k)
+      }
+      Algorithm::HS512 => {
+        let mut k = HS512Key::from_bytes(key_str.as_ref());
+        if with_key_id {
+          k.create_key_id();
+        };
+        JwtSigningKey::HS512(k)
+      }
       Algorithm::ES256 => {
         let private_key: Result<p256::SecretKey, p256::pkcs8::Error> =
           p256::pkcs8::FromPrivateKey::from_pkcs8_pem(key_str);
         if let Ok(unwrapped) = private_key {
           let keypair = ES256KeyPair::from_bytes(&unwrapped.to_bytes())?;
-          JwtSigningKey::ES256(keypair)
+          if with_key_id {
+            let mut pk = keypair.public_key();
+            JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
+          } else {
+            JwtSigningKey::ES256(keypair)
+          }
         } else {
           bail!("Unsupported key format");
         }
@@ -131,6 +159,7 @@ impl JwtSigningKey {
     // get token info
     let parsed: Vec<&str> = (&generated_jwt).split(".").collect();
     let decoded_claims = base64::decode(parsed[1])?;
+    // debug!("{:?}", String::from_utf8(base64::decode(parsed[0])?)?);
     let json_string = String::from_utf8(decoded_claims)?;
     let json_value: Value = serde_json::from_str(&json_string).map_err(|e| anyhow!("{}", e))?;
 

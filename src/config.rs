@@ -37,6 +37,12 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .takes_value(true)
             .default_value(DB_FILE_PATH)
             .help("SQLite database file path"),
+        )
+        .arg(
+          Arg::with_name("with_key_id")
+            .short("i")
+            .long("with-key-id")
+            .help("Include key id in JWT"),
         ),
     )
     .subcommand(
@@ -82,6 +88,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       }
     };
 
+    let with_key_id = matches.is_present("with_key_id");
     let signing_key: JwtSigningKey = match matches.value_of("signing_key_path") {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
@@ -89,9 +96,9 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             AlgorithmType::HMAC => {
               let truncate_vec: Vec<&str> = content.split("\n").collect();
               ensure!(truncate_vec.len() > 0, true);
-              JwtSigningKey::new(&algorithm, &truncate_vec[0])?
+              JwtSigningKey::new(&algorithm, &truncate_vec[0], with_key_id)?
             }
-            _ => JwtSigningKey::new(&algorithm, &content)?,
+            _ => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
           }
         } else {
           bail!("Failed to read private key");

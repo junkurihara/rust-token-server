@@ -71,7 +71,7 @@ pub fn create_user<'a>(
     }
   };
   if !claims.custom.is_admin {
-    error!("Non administrator");
+    error!("Non administrator flag in token");
     return error(403);
   }
 
@@ -89,6 +89,7 @@ pub fn create_user<'a>(
             warn!("Non-registered admin username [{}] was attempted", sub);
             return error(400);
           }
+          // TODO: check admin flag and so on to verify it as an id token
         }
       };
     }
