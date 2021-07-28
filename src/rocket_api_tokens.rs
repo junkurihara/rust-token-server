@@ -17,6 +17,7 @@ pub struct PasswordCredential {
 #[derive(Deserialize, Debug, Clone)]
 pub struct RequestBody {
   auth: PasswordCredential,
+  client_id: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -41,6 +42,7 @@ pub fn tokens<'a>(
 ) -> (Status, (ContentType, Json<ResponseBody>)) {
   // find user
   let login_info = request_body.auth.clone();
+  let client_id = request_body.client_id.clone();
   let username = login_info.username;
   let user_db = globals.user_db.clone();
 
@@ -53,25 +55,36 @@ pub fn tokens<'a>(
   };
 
   if let Some(info) = user_info {
+    // password check
     let verified = auth::verify_argon2(&login_info.password, info.get_encoded_hash());
-    match verified {
-      Ok(v) => {
-        if v {
-          if let Ok(res) = access(&info, globals) {
-            return res;
+    // client check
+    let client_is_allowed = match &globals.allowed_client_ids {
+      None => true, // anything is allowed
+      Some(cids) => cids.contains(&client_id),
+    };
+    if client_is_allowed {
+      match verified {
+        Ok(v) => {
+          if v {
+            if let Ok(res) = access(&info, globals) {
+              return res;
+            } else {
+              error!("Failed to create token");
+              return error(403);
+            }
           } else {
-            error!("Failed to create token");
+            warn!("Invalid password is given for [{}]", username);
             return error(403);
           }
-        } else {
-          warn!("Invalid password is given for [{}]", username);
-          return error(403);
+        }
+        Err(e) => {
+          error!("Argon2 verification failed: {}", e);
+          return error(503);
         }
       }
-      Err(e) => {
-        error!("Argon2 verification failed: {}", e);
-        return error(503);
-      }
+    } else {
+      error!("Access from a client that is not allowed");
+      return error(403);
     }
   } else {
     warn!("Non-registered username [{}] was attempted", username);

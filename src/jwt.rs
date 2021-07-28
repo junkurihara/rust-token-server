@@ -29,7 +29,8 @@ pub fn generate_jwt(user_info: &UserInfo, globals: &State<Arc<Globals>>) -> Resu
   let addition = AdditionalClaimData {
     is_admin: *user_info.clone().is_admin(),
   };
-  let claims = Claims::with_custom_claims(addition, Duration::from_days(JWT_DURATION_DAYS as u64))
+  //TODO: audience and issuers, and refresh token?
+  let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
     .with_subject(user_info.get_username());
   let (generated_jwt, iat, exp) = &globals.signing_key.generate_token(claims)?;
   info!(

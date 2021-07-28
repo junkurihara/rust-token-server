@@ -5,6 +5,7 @@ pub struct Globals {
   pub user_db: UserDB,
   pub algorithm: Algorithm,
   pub signing_key: JwtSigningKey,
+  pub allowed_client_ids: Option<Vec<String>>,
 }
 
 pub enum Mode {

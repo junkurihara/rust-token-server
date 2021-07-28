@@ -89,7 +89,7 @@ pub fn create_user<'a>(
             warn!("Non-registered admin username [{}] was attempted", sub);
             return error(400);
           }
-          // TODO: check admin flag and so on to verify it as an id token
+          // TODO: check admin flag in DB and so on to verify it as an id token
         }
       };
     }

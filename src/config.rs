@@ -43,6 +43,12 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .short("i")
             .long("with-key-id")
             .help("Include key id in JWT"),
+        )
+        .arg(
+          Arg::with_name("ignore_client_id")
+            .short("o")
+            .long("ignore-client-id")
+            .help("Ignore checking client id in token request"),
         ),
     )
     .subcommand(
@@ -70,6 +76,13 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .takes_value(true)
             .required(true)
             .help("SQLite database admin password"),
+        )
+        .arg(
+          Arg::with_name("client_ids")
+            .short("c")
+            .long("client-ids")
+            .takes_value(true)
+            .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\""),
         ),
     );
 
@@ -120,13 +133,25 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
     let user_db = UserDB {
       db_file_path,
       user_table_name: USER_TABLE_NAME.to_string(),
+      allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
     };
-    user_db.clone().init_db(None, None)?; // check db if it is already initialized.
+    user_db.clone().init_db(None, None, vec![])?; // check db if it is already initialized.
+
+    // read client ids
+    let ignore_client_id = matches.is_present("ignore_client_id");
+    let client_ids = user_db.clone().get_all_allowed_client_ids()?;
+    if !ignore_client_id {
+      info!("allowed_client_ids {:?}", client_ids);
+    }
 
     let globals = Arc::new(Globals {
       user_db,
       algorithm,
       signing_key,
+      allowed_client_ids: match ignore_client_id {
+        false => Some(client_ids),
+        true => None,
+      },
     });
 
     Ok((Mode::RUN, Some(globals)))
@@ -141,13 +166,22 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
     // Setting up globals
     let user_db = UserDB {
       db_file_path,
+      allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
       user_table_name: USER_TABLE_NAME.to_string(),
     };
 
     let admin_name = matches.value_of("admin_name");
     let admin_password = matches.value_of("admin_password");
 
-    user_db.init_db(admin_name, admin_password)?;
+    let client_ids = matches.value_of("client_ids");
+    match client_ids {
+      Some(cids) => user_db.init_db(
+        admin_name,
+        admin_password,
+        cids.split(",").collect::<Vec<&str>>(),
+      )?,
+      None => user_db.init_db(admin_name, admin_password, vec![])?,
+    }
 
     Ok((Mode::INIT, None))
   } else {

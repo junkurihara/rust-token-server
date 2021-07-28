@@ -26,6 +26,7 @@ impl UserInfo {
 #[derive(Debug, Clone)]
 pub struct UserDB {
   pub user_table_name: String,
+  pub allowed_client_table_name: String,
   pub db_file_path: String,
 }
 
@@ -34,9 +35,11 @@ impl UserDB {
     self,
     admin_name: Option<&str>,
     admin_password: Option<&str>,
+    allowed_client_ids: Vec<&str>,
   ) -> Result<(), Error> {
     // create table if not exist
     let conn = Connection::open(&self.db_file_path)?;
+    // user table
     let sql = format!(
       "create table if not exists {} (
       id integer primary key,
@@ -48,8 +51,18 @@ impl UserDB {
     );
     conn.execute(&sql, params![])?;
 
+    // client_id table
+    let sql = format!(
+      "create table if not exists {} (
+      id integer primary key,
+      client_id text not null unique
+    )",
+      &self.allowed_client_table_name
+    );
+    conn.execute(&sql, params![])?;
+
     // create admin user if no user exist
-    let row_num = self._count_all_users(&conn)?;
+    let row_num = self._count_all_members(&conn, &self.user_table_name)?;
     if row_num == 0 {
       if let (Some(aid), Some(apassword)) = (admin_name, admin_password) {
         info!("no_user: create admin user with given username and password");
@@ -59,13 +72,21 @@ impl UserDB {
         bail!("DB admin name and password must be given at first for initialization. run \"init\"")
       }
     }
+
+    // create admin user if no user exist
+    let row_num = self._count_all_members(&conn, &self.allowed_client_table_name)?;
+    if row_num == 0 {
+      info!("no_client_ids: add client_ids");
+      self._add_client_ids(&conn, &allowed_client_ids)?;
+    }
+
     conn.close().map_err(|(_, e)| anyhow!(e))?;
 
     Ok(())
   }
 
-  fn _count_all_users(&self, conn: &Connection) -> Result<usize, Error> {
-    let sql = &format!("select count(*) from {}", &self.user_table_name);
+  fn _count_all_members(&self, conn: &Connection, table_name: &str) -> Result<usize, Error> {
+    let sql = &format!("select count(*) from {}", table_name);
     let mut prep = conn.prepare(sql)?;
     let row_num = prep.query_row(params![], |row| return row.get(0) as Result<usize>)?;
     return Ok(row_num);
@@ -108,6 +129,34 @@ impl UserDB {
         return Ok(None);
       }
     }
+  }
+
+  pub fn get_all_allowed_client_ids(&self) -> Result<Vec<String>, Error> {
+    let conn = Connection::open(&self.db_file_path)?;
+
+    let sql = &format!("select * from {}", self.allowed_client_table_name);
+    let mut nexts = vec![];
+    {
+      let mut prep = conn.prepare(sql)?;
+      let mut rows = prep.query_map(params![], |row| Ok(row.get(1)?))?;
+      while let Some(next) = rows.next() {
+        nexts.push(next?)
+      }
+    }
+    conn.close().map_err(|(_, e)| anyhow!(e))?;
+
+    Ok(nexts)
+  }
+
+  fn _add_client_ids(&self, conn: &Connection, client_ids: &Vec<&str>) -> Result<(), Error> {
+    let sql = &format!(
+      "insert into {} (client_id) VALUES (?)",
+      &self.allowed_client_table_name
+    );
+    for cid in client_ids {
+      conn.execute(sql, params![*cid])?;
+    }
+    Ok(())
   }
 
   pub fn add_user(&self, username: &str, password: &str, is_admin: bool) -> Result<(), Error> {

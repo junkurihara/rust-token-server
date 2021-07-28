@@ -1,5 +1,6 @@
 use argon2::{Config, ThreadMode, Variant, Version};
 
+pub const ALLOWED_CLIENT_TABLE_NAME: &str = "client_ids";
 pub const USER_TABLE_NAME: &str = "users";
 pub const DB_FILE_PATH: &str = "./users.db";
 
@@ -16,4 +17,4 @@ pub const ARGON2_CONFIG: Config = Config {
 };
 pub const ARGON2_SALT_LEN: usize = 32;
 
-pub const JWT_DURATION_DAYS: usize = 30;
+pub const JWT_DURATION_MINS: usize = 30; // TODO Clapで設定できるように
