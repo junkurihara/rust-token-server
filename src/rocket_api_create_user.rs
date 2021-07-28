@@ -1,3 +1,4 @@
+use crate::db::UserSearchKey;
 use crate::error::*;
 use crate::Globals;
 use rocket::http::{ContentType, Status};
@@ -62,11 +63,11 @@ pub fn create_user<'a>(
     warn!("Invalid bearer token");
     return error(403);
   }
-  // Verify bearer token
-  let claims = match globals.signing_key.verify_token(jwt[1]) {
+  // Verify bearer token with aud and iss checks
+  let claims = match globals.signing_key.verify_token(jwt[1], globals) {
     Ok(c) => c,
     Err(e) => {
-      error!("Unauthorized access: {}", e);
+      error!("Unauthorized access, failed to verify JWT: {}", e);
       return error(403);
     }
   };
@@ -77,20 +78,26 @@ pub fn create_user<'a>(
 
   // Check db for admin existence
   let user_db = globals.user_db.clone();
-  match claims.subject {
+  match &claims.subject {
     Some(sub) => {
-      match user_db.get_user(&sub) {
+      match user_db.get_user(UserSearchKey::SubscriberId(&sub)) {
         Err(e) => {
           error!("Failed to get admin info: {}", e);
           return error(503);
         }
-        Ok(opt) => {
-          if let None = opt {
+        Ok(opt) => match opt {
+          None => {
             warn!("Non-registered admin username [{}] was attempted", sub);
             return error(400);
           }
-          // TODO: check admin flag in DB and so on to verify it as an id token
-        }
+          Some(info) => {
+            // check admin flag in DB etc to verify access as an id token
+            if !*info.is_admin() {
+              warn!("In DB, requested user is not registered as admin");
+              return error(400);
+            }
+          }
+        },
       };
     }
     None => {

@@ -1,12 +1,16 @@
 use crate::auth::generate_argon2;
+use crate::constants::*;
 use crate::error::*;
 use log::{debug, error, info, warn};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use rusqlite::{params, Connection, Result};
 
 #[derive(Debug, Clone)]
 pub struct UserInfo {
   id: usize,
   username: String,
+  subscriber_id: String,
   encoded_hash: String, // including salt and argon2 config
   is_admin: bool,
 }
@@ -21,13 +25,22 @@ impl UserInfo {
   pub fn get_username<'a>(&'a self) -> &'a str {
     &self.username
   }
+  pub fn get_subscriber_id<'a>(&'a self) -> &'a str {
+    &self.subscriber_id
+  }
 }
 
 #[derive(Debug, Clone)]
 pub struct UserDB {
   pub user_table_name: String,
   pub allowed_client_table_name: String,
+  pub token_table_name: String,
   pub db_file_path: String,
+}
+
+pub enum UserSearchKey<'a> {
+  SubscriberId(&'a str),
+  Username(&'a str),
 }
 
 impl UserDB {
@@ -44,6 +57,7 @@ impl UserDB {
       "create table if not exists {} (
       id integer primary key,
       username text not null unique,
+      subscriber_id text not null unique,
       encoded_hash text not null,
       is_admin integer
     )",
@@ -58,6 +72,19 @@ impl UserDB {
       client_id text not null unique
     )",
       &self.allowed_client_table_name
+    );
+    conn.execute(&sql, params![])?;
+
+    // token table
+    // TODO: remove expired tokens periodically
+    let sql = format!(
+      "create table if not exists {} (
+          id integer primary key,
+          subscriber_id text,
+          refresh_token text,
+          expires integer
+        )",
+      &self.token_table_name
     );
     conn.execute(&sql, params![])?;
 
@@ -76,7 +103,7 @@ impl UserDB {
     // create admin user if no user exist
     let row_num = self._count_all_members(&conn, &self.allowed_client_table_name)?;
     if row_num == 0 {
-      info!("no_client_ids: add client_ids");
+      info!("no_client_ids: add client_ids: {:?}", allowed_client_ids);
       self._add_client_ids(&conn, &allowed_client_ids)?;
     }
 
@@ -92,25 +119,36 @@ impl UserDB {
     return Ok(row_num);
   }
 
-  pub fn get_user(&self, username: &str) -> Result<Option<UserInfo>, Error> {
+  pub fn get_user(&self, search_key: UserSearchKey) -> Result<Option<UserInfo>, Error> {
     let conn = Connection::open(&self.db_file_path)?;
-    let user_info = self._get_user(&conn, username);
+    let user_info = self._get_user(&conn, search_key);
     conn.close().map_err(|(_, e)| anyhow!(e))?;
     user_info
   }
 
-  fn _get_user(&self, conn: &Connection, username: &str) -> Result<Option<UserInfo>, Error> {
-    let sql = &format!(
-      "select * from {} where username='{}'",
-      self.user_table_name, username
-    );
-    let mut prep = conn.prepare(sql)?;
+  fn _get_user(
+    &self,
+    conn: &Connection,
+    search_key: UserSearchKey,
+  ) -> Result<Option<UserInfo>, Error> {
+    let sql = match search_key {
+      UserSearchKey::SubscriberId(sub_id) => format!(
+        "select * from {} where subscriber_id='{}'",
+        self.user_table_name, sub_id
+      ),
+      UserSearchKey::Username(username) => format!(
+        "select * from {} where username='{}'",
+        self.user_table_name, username
+      ),
+    };
+    let mut prep = conn.prepare(&sql)?;
     let mut rows = prep.query_map(params![], |row| {
       Ok(UserInfo {
         id: row.get(0)?,
         username: row.get(1)?,
-        encoded_hash: row.get(2)?,
-        is_admin: row.get(3)?,
+        subscriber_id: row.get(2)?,
+        encoded_hash: row.get(3)?,
+        is_admin: row.get(4)?,
       })
     })?;
     let user_info = rows.next();
@@ -178,12 +216,24 @@ impl UserDB {
       false => 0,
     };
     let sql = &format!(
-      "insert into {} (username, encoded_hash, is_admin) VALUES (?, ?, ?)",
+      "insert into {} (username, subscriber_id, encoded_hash, is_admin) VALUES (?, ?, ?, ?)",
       self.user_table_name
     );
     let encoded_hash: &str = &generate_argon2(password)?;
+    let subscriber_id: String = thread_rng()
+      .sample_iter(&Alphanumeric)
+      .take(SUBSCRIBER_ID_LEN)
+      .map(char::from)
+      .collect();
 
-    conn.execute(sql, params![username, encoded_hash, admin_int])?;
+    debug!(
+      "subscriber_id is created for {}: {}",
+      username, subscriber_id
+    );
+    conn.execute(
+      sql,
+      params![username, &subscriber_id, encoded_hash, admin_int],
+    )?;
 
     Ok(())
   }

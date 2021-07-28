@@ -1,7 +1,7 @@
 use crate::auth;
-use crate::db::UserInfo;
+use crate::db::{UserInfo, UserSearchKey};
 use crate::error::*;
-use crate::jwt::{generate_jwt, Token};
+use crate::jwt::{generate_jwt, Token, TokenMetaData};
 use crate::Globals;
 use rocket::http::{ContentType, Status};
 use rocket::serde::{json::Json, Deserialize, Serialize};
@@ -28,6 +28,7 @@ pub enum ResponseBody {
 #[derive(Serialize, Debug, Clone)]
 pub struct TokenResponse {
   token: Token,
+  metadata: TokenMetaData,
   message: String,
 }
 #[derive(Serialize, Debug, Clone)]
@@ -46,7 +47,7 @@ pub fn tokens<'a>(
   let username = login_info.username;
   let user_db = globals.user_db.clone();
 
-  let user_info = match user_db.get_user(&username) {
+  let user_info = match user_db.get_user(UserSearchKey::Username(&username)) {
     Err(e) => {
       error!("Failed to seek database: {}", e);
       return error(503);
@@ -60,17 +61,20 @@ pub fn tokens<'a>(
     // client check
     let client_is_allowed = match &globals.allowed_client_ids {
       None => true, // anything is allowed
-      Some(cids) => cids.contains(&client_id),
+      Some(cid) => cid.contains(&client_id),
     };
     if client_is_allowed {
       match verified {
         Ok(v) => {
           if v {
-            if let Ok(res) = access(&info, globals) {
-              return res;
-            } else {
-              error!("Failed to create token");
-              return error(403);
+            match access(&info, &client_id, globals) {
+              Ok(res) => {
+                return res;
+              }
+              Err(e) => {
+                error!("Failed to create token: {}", e);
+                return error(403);
+              }
             }
           } else {
             warn!("Invalid password is given for [{}]", username);
@@ -94,15 +98,17 @@ pub fn tokens<'a>(
 
 pub fn access(
   info: &UserInfo,
+  client_id: &str,
   globals: &State<Arc<Globals>>,
 ) -> Result<(Status, (ContentType, Json<ResponseBody>)), Error> {
-  let token = generate_jwt(info, globals)?;
+  let (token, metadata) = generate_jwt(info, client_id, globals)?;
   return Ok((
     Status::new(200),
     (
       ContentType::JSON,
       Json(ResponseBody::Access(TokenResponse {
         token,
+        metadata,
         message: "ok".to_string(),
       })),
     ),

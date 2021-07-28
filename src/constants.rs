@@ -2,6 +2,7 @@ use argon2::{Config, ThreadMode, Variant, Version};
 
 pub const ALLOWED_CLIENT_TABLE_NAME: &str = "client_ids";
 pub const USER_TABLE_NAME: &str = "users";
+pub const TOKEN_TABLE_NAME: &str = "tokens";
 pub const DB_FILE_PATH: &str = "./users.db";
 
 pub const ARGON2_CONFIG: Config = Config {
@@ -16,5 +17,6 @@ pub const ARGON2_CONFIG: Config = Config {
   hash_length: 32,
 };
 pub const ARGON2_SALT_LEN: usize = 32;
+pub const SUBSCRIBER_ID_LEN: usize = 32;
 
 pub const JWT_DURATION_MINS: usize = 30; // TODO Clapで設定できるように

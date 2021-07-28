@@ -7,6 +7,7 @@ mod globals;
 mod jwt;
 mod rocket_api_create_user;
 mod rocket_api_tokens;
+mod utils;
 
 use error::*;
 use globals::{Globals, Mode};

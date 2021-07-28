@@ -9,6 +9,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
+  use crate::utils::verify_url;
+
   let _ = include_str!("../Cargo.toml");
   let options = app_from_crate!()
     .subcommand(
@@ -49,6 +51,15 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .short("o")
             .long("ignore-client-id")
             .help("Ignore checking client id in token request"),
+        )
+        .arg(
+          Arg::with_name("token_issuer")
+            .short("t")
+            .long("token-issuer")
+            .required(true)
+            .validator(verify_url)
+            .takes_value(true)
+            .help("Issuer of Id token specified as URL like \"https://example.com/issue\""),
         ),
     )
     .subcommand(
@@ -134,6 +145,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       db_file_path,
       user_table_name: USER_TABLE_NAME.to_string(),
       allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
+      token_table_name: TOKEN_TABLE_NAME.to_string(),
     };
     user_db.clone().init_db(None, None, vec![])?; // check db if it is already initialized.
 
@@ -144,6 +156,14 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       info!("allowed_client_ids {:?}", client_ids);
     }
 
+    // get issuer
+    let token_issuer = match matches.value_of("token_issuer") {
+      Some(t) => t,
+      None => {
+        bail!("Issuer must be specified");
+      }
+    };
+
     let globals = Arc::new(Globals {
       user_db,
       algorithm,
@@ -152,6 +172,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
         false => Some(client_ids),
         true => None,
       },
+      token_issuer: token_issuer.to_string(),
     });
 
     Ok((Mode::RUN, Some(globals)))
@@ -168,6 +189,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       db_file_path,
       allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
       user_table_name: USER_TABLE_NAME.to_string(),
+      token_table_name: TOKEN_TABLE_NAME.to_string(),
     };
 
     let admin_name = matches.value_of("admin_name");

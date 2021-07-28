@@ -9,15 +9,24 @@ use p256;
 use rocket::serde::Serialize;
 use rocket::State;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
-  // issuer: String, // like 'https://....' for IdToken
+  id: String, // jwt itself is given here
   issued_at: String,
   expires: String,
-  id: String, // jwt itself is given here
+  allowed_apps: Vec<String>, // allowed apps, i.e, client_ids
+  issuer: String,            // like 'https://....' for IdToken
+  subscriber_id: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct TokenMetaData {
+  username: String,
+  is_admin: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,26 +34,46 @@ pub struct AdditionalClaimData {
   pub is_admin: bool,
 }
 
-pub fn generate_jwt(user_info: &UserInfo, globals: &State<Arc<Globals>>) -> Result<Token, Error> {
+pub fn generate_jwt(
+  user_info: &UserInfo,
+  client_id: &str,
+  globals: &State<Arc<Globals>>,
+) -> Result<(Token, TokenMetaData), Error> {
   let addition = AdditionalClaimData {
     is_admin: *user_info.clone().is_admin(),
   };
-  //TODO: audience and issuers, and refresh token?
+  //TODO: generate refresh token? refresh token must be added to userdb if used
+  let mut audiences = HashSet::new();
+  audiences.insert(client_id);
   let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
-    .with_subject(user_info.get_username());
-  let (generated_jwt, iat, exp) = &globals.signing_key.generate_token(claims)?;
+    .with_subject(user_info.get_subscriber_id())
+    .with_issuer(&globals.token_issuer)
+    .with_audiences(audiences);
+  let (generated_jwt, iat, exp, iss, aud) = &globals.signing_key.generate_token(claims)?;
   info!(
-    "Issued a JWT for {} with iat: {}, exp: {}",
+    "[{}] Issued a JWT for sub: {} with iat: {}, exp: {}, iss: {}, aud: {:?}",
     user_info.get_username(),
+    user_info.get_subscriber_id(),
     iat,
-    exp
+    exp,
+    iss,
+    aud
   );
 
-  return Ok(Token {
-    issued_at: iat.to_string(),
-    expires: exp.to_string(),
-    id: generated_jwt.to_string(),
-  });
+  return Ok((
+    Token {
+      id: generated_jwt.to_string(),
+      issuer: iss.to_string(),
+      allowed_apps: aud.to_vec(),
+      issued_at: iat.to_string(),
+      expires: exp.to_string(),
+      subscriber_id: user_info.get_subscriber_id().to_string(),
+    },
+    TokenMetaData {
+      username: user_info.get_username().to_string(),
+      is_admin: *user_info.is_admin(),
+    },
+  ));
 }
 
 #[derive(Debug, Clone)]
@@ -147,7 +176,7 @@ impl JwtSigningKey {
   pub fn generate_token(
     &self,
     claims: JWTClaims<AdditionalClaimData>,
-  ) -> Result<(String, String, String), Error> {
+  ) -> Result<(String, String, String, String, Vec<String>), Error> {
     let generated_jwt = match self {
       JwtSigningKey::ES256(pk) => pk.sign(claims),
       JwtSigningKey::HS256(pk) => pk.authenticate(claims),
@@ -166,13 +195,42 @@ impl JwtSigningKey {
 
     let iat = (&json_value["iat"]).to_string().parse::<i64>()?;
     let exp = (&json_value["exp"]).to_string().parse::<i64>()?;
+    let iss = match (&json_value["iss"]).as_str() {
+      None => bail!("No issuer is specified in JWT"),
+      Some(i) => i.to_string(),
+    };
+    let aud = if let Value::Array(aud_vec) = &json_value["aud"] {
+      aud_vec
+        .iter()
+        .filter_map(|x| x.as_str())
+        .map(|y| y.to_string())
+        .collect()
+    } else {
+      vec![]
+    };
 
     let issued_at: DateTime<Local> = Local.timestamp(iat, 0);
     let expires: DateTime<Local> = Local.timestamp(exp, 0);
-    return Ok((generated_jwt, issued_at.to_string(), expires.to_string()));
+    return Ok((
+      generated_jwt,
+      issued_at.to_string(),
+      expires.to_string(),
+      iss,
+      aud,
+    ));
   }
 
-  pub fn verify_token(&self, token: &str) -> Result<JWTClaims<AdditionalClaimData>, Error> {
+  pub fn verify_token(
+    &self,
+    token: &str,
+    globals: &Arc<Globals>,
+  ) -> Result<JWTClaims<AdditionalClaimData>, Error> {
+    let mut options = VerificationOptions::default();
+    if let Some(allowed) = &globals.allowed_client_ids {
+      options.allowed_audiences = Some(HashSet::from_strings(&allowed));
+    }
+    options.allowed_issuers = Some(HashSet::from_strings(&vec![&globals.token_issuer]));
+    // debug!("options: {:?}", options);
     let verified = match self {
       JwtSigningKey::ES256(sk) => sk
         .public_key()

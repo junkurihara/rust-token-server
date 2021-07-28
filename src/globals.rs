@@ -6,6 +6,7 @@ pub struct Globals {
   pub algorithm: Algorithm,
   pub signing_key: JwtSigningKey,
   pub allowed_client_ids: Option<Vec<String>>,
+  pub token_issuer: String,
 }
 
 pub enum Mode {
