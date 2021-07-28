@@ -5,13 +5,18 @@ mod db;
 mod error;
 mod globals;
 mod jwt;
+mod request;
+mod request_bearer_token;
+mod response;
 mod rocket_api_create_user;
+mod rocket_api_refresh;
+mod rocket_api_token_checkflow;
 mod rocket_api_tokens;
 mod utils;
-
 use error::*;
 use globals::{Globals, Mode};
 use rocket_api_create_user::create_user;
+use rocket_api_refresh::refresh;
 use rocket_api_tokens::tokens;
 
 #[macro_use]
@@ -35,7 +40,7 @@ async fn main() -> Result<(), Error> {
       if let Some(globals) = globals_opt {
         rocket::build()
           .mount("/hello", routes![hello])
-          .mount("/v1.0", routes![tokens, create_user])
+          .mount("/v1.0", routes![tokens, create_user, refresh])
           .manage(globals)
           .launch()
           .await?;

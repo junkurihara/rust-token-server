@@ -10,6 +10,7 @@ RUST_LOG=debug /opt/token-server/sbin/rust-token-server init \
   --admin-name ${ADMIN_NAME} \
   --admin-password ${ADMIN_PASSWORD} \
   --db-file-path /opt/token-server/var/userdb.db
+  --client-ids ${CLIENT_IDS}
 
 echo "run the server"
 RUST_LOG=debug \
@@ -19,4 +20,6 @@ ROCKET_PORT=8000 \
 /opt/token-server/sbin/rust-token-server run \
   --signing-algorithm ${SIGNING_ALGORITHM} \
   --signing-key-path /opt/token-server/etc/private_key.pem \
-  --db-file-path /opt/token-server/var/userdb.db
+  --db-file-path /opt/token-server/var/userdb.db \
+  --token-issuer ${TOKEN_ISSUER} \
+  --with-key-id

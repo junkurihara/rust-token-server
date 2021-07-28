@@ -1,54 +1,20 @@
-use crate::db::UserSearchKey;
+use crate::db::UserInfo;
 use crate::error::*;
+use crate::jwt::AdditionalClaimData;
+use crate::request::PasswordCredentialRequest;
+use crate::request_bearer_token::*;
+use crate::response::{message_response_error, MessageResponse, MessageResponseBody};
+use crate::rocket_api_token_checkflow::check_token_and_db;
 use crate::Globals;
+use jwt_simple::prelude::*;
 use rocket::http::{ContentType, Status};
-use rocket::outcome::Outcome;
-use rocket::request;
-use rocket::request::FromRequest;
-use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::Request;
+use rocket::serde::{json::Json, Deserialize};
 use rocket::State;
 use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct PasswordCredential {
-  username: String,
-  password: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct BearerToken(String);
-
-#[derive(Deserialize, Debug, Clone)]
 pub struct RequestBody {
-  auth: PasswordCredential,
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for BearerToken {
-  type Error = anyhow::Error;
-
-  async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-    let token = request.headers().get_one("Authorization");
-    match token {
-      Some(token) => {
-        // check validity
-        Outcome::Success(BearerToken(token.to_string()))
-      }
-      None => Outcome::Failure((Status::Unauthorized, anyhow!("No bearer token"))),
-    }
-  }
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub enum ResponseBody {
-  Access(MessageResponse),
-  Error(MessageResponse),
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct MessageResponse {
-  message: String,
+  auth: PasswordCredentialRequest,
 }
 
 #[post("/create_user", format = "application/json", data = "<request_body>")]
@@ -56,55 +22,56 @@ pub fn create_user<'a>(
   request_body: Json<RequestBody>,
   bearer_token: BearerToken,
   globals: &State<Arc<Globals>>,
-) -> (Status, (ContentType, Json<ResponseBody>)) {
-  // Check authorization header first;
-  let jwt: Vec<&str> = bearer_token.0.split(" ").collect();
-  if jwt[0] != "Bearer" && jwt.len() == 2 {
-    warn!("Invalid bearer token");
-    return error(403);
-  }
-  // Verify bearer token with aud and iss checks
-  let claims = match globals.signing_key.verify_token(jwt[1], globals) {
-    Ok(c) => c,
-    Err(e) => {
-      error!("Unauthorized access, failed to verify JWT: {}", e);
-      return error(403);
-    }
-  };
-  if !claims.custom.is_admin {
-    error!("Non administrator flag in token");
-    return error(403);
-  }
+) -> (Status, (ContentType, Json<MessageResponseBody>)) {
+  let (_info, _claims): (UserInfo, JWTClaims<AdditionalClaimData>) =
+    match check_token_and_db(globals, bearer_token, true) {
+      Ok(i) => i,
+      Err(e) => return message_response_error(e),
+    };
+  // // Verify bearer token with aud and iss checks
+  // let claims = match globals.signing_key.verify_token(&bearer_token.0, globals) {
+  //   Ok(c) => c,
+  //   Err(e) => {
+  //     error!("Unauthorized access, failed to verify JWT: {}", e);
+  //     return message_response_error(403);
+  //   }
+  // };
+  // if !claims.custom.is_admin {
+  //   error!("Non administrator flag in token");
+  //   return message_response_error(403);
+  // }
 
-  // Check db for admin existence
-  let user_db = globals.user_db.clone();
-  match &claims.subject {
-    Some(sub) => {
-      match user_db.get_user(UserSearchKey::SubscriberId(&sub)) {
-        Err(e) => {
-          error!("Failed to get admin info: {}", e);
-          return error(503);
-        }
-        Ok(opt) => match opt {
-          None => {
-            warn!("Non-registered admin username [{}] was attempted", sub);
-            return error(400);
-          }
-          Some(info) => {
-            // check admin flag in DB etc to verify access as an id token
-            if !*info.is_admin() {
-              warn!("In DB, requested user is not registered as admin");
-              return error(400);
-            }
-          }
-        },
-      };
-    }
-    None => {
-      error!("Invalid administrator");
-      return error(403);
-    }
-  }
+  // // Check db for user existence
+  // let user_db = globals.user_db.clone();
+  // let info: UserInfo = match &claims.subject {
+  //   Some(sub) => {
+  //     let info: UserInfo = match user_db.get_user(UserSearchKey::SubscriberId(&sub)) {
+  //       Err(e) => {
+  //         error!("Failed to get user info: {}", e);
+  //         return message_response_error(503);
+  //       }
+
+  //       Ok(opt) => match opt {
+  //         None => {
+  //           warn!("Non-registered user username [{}] was attempted", sub);
+  //           return message_response_error(400);
+  //         }
+  //         Some(info) => info,
+  //       },
+  //     };
+  //     info
+  //   }
+  //   None => {
+  //     error!("Invalid user");
+  //     return message_response_error(403);
+  //   }
+  // };
+
+  // // check admin flag in DB etc to verify access as an id token
+  // if !*info.is_admin() {
+  //   warn!("In DB, requested user is not registered as admin");
+  //   return message_response_error(400);
+  // }
 
   // Finally try to add a new user
   let login_info = request_body.auth.clone();
@@ -115,7 +82,7 @@ pub fn create_user<'a>(
   match user_db.add_user(&username, &password, false) {
     Err(e) => {
       error!("Failed to add new user: {}", e);
-      return error(503);
+      return message_response_error(Status::ServiceUnavailable);
     }
     Ok(_) => {
       info!("Add a new standard user: {}", username);
@@ -123,52 +90,20 @@ pub fn create_user<'a>(
         return res;
       } else {
         error!("Failed to create user");
-        return error(403);
+        return message_response_error(Status::Forbidden);
       }
     }
   };
 }
 
-pub fn access() -> Result<(Status, (ContentType, Json<ResponseBody>)), Error> {
+pub fn access() -> Result<(Status, (ContentType, Json<MessageResponseBody>)), Error> {
   return Ok((
-    Status::new(200),
+    Status::Created,
     (
       ContentType::JSON,
-      Json(ResponseBody::Access(MessageResponse {
-        message: "ok".to_string(),
+      Json(MessageResponseBody::Access(MessageResponse {
+        message: "ok. new user is created.".to_string(),
       })),
     ),
   ));
-}
-
-fn error(code: usize) -> (Status, (ContentType, Json<ResponseBody>)) {
-  match code {
-    503 => (
-      Status::new(503),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(MessageResponse {
-          message: "Server Fail".to_string(),
-        })),
-      ),
-    ),
-    403 => (
-      Status::new(403),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(MessageResponse {
-          message: "Authentication Error".to_string(),
-        })),
-      ),
-    ),
-    _ => (
-      Status::new(400),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(MessageResponse {
-          message: "Bad Request".to_string(),
-        })),
-      ),
-    ),
-  }
 }

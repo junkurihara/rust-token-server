@@ -6,6 +6,8 @@ use base64;
 use chrono::{DateTime, Local, TimeZone};
 use jwt_simple::prelude::*;
 use p256;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use rocket::serde::Serialize;
 use rocket::State;
 use serde_json::Value;
@@ -15,12 +17,13 @@ use std::sync::Arc;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
-  id: String, // jwt itself is given here
-  issued_at: String,
-  expires: String,
-  allowed_apps: Vec<String>, // allowed apps, i.e, client_ids
-  issuer: String,            // like 'https://....' for IdToken
-  subscriber_id: String,
+  pub id: String, // jwt itself is given here
+  pub refresh: Option<String>,
+  pub issued_at: String,
+  pub expires: String,
+  pub allowed_apps: Vec<String>, // allowed apps, i.e, client_ids
+  pub issuer: String,            // like 'https://....' for IdToken
+  pub subscriber_id: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -38,11 +41,11 @@ pub fn generate_jwt(
   user_info: &UserInfo,
   client_id: &str,
   globals: &State<Arc<Globals>>,
+  refresh_required: bool,
 ) -> Result<(Token, TokenMetaData), Error> {
   let addition = AdditionalClaimData {
     is_admin: *user_info.clone().is_admin(),
   };
-  //TODO: generate refresh token? refresh token must be added to userdb if used
   let mut audiences = HashSet::new();
   audiences.insert(client_id);
   let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
@@ -59,10 +62,27 @@ pub fn generate_jwt(
     iss,
     aud
   );
+  let refresh: Option<String> = match refresh_required {
+    true => {
+      let refresh_string = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(REFRESH_TOKEN_LEN)
+        .map(char::from)
+        .collect();
+      debug!(
+        "[{}] Created refresh token: {}",
+        user_info.get_username(),
+        refresh_string
+      );
+      Some(refresh_string)
+    }
+    _ => None,
+  };
 
   return Ok((
     Token {
       id: generated_jwt.to_string(),
+      refresh,
       issuer: iss.to_string(),
       allowed_apps: aud.to_vec(),
       issued_at: iat.to_string(),

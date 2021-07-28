@@ -1,6 +1,7 @@
 use crate::auth::generate_argon2;
 use crate::constants::*;
 use crate::error::*;
+use fallible_streaming_iterator::FallibleStreamingIterator;
 use log::{debug, error, info, warn};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -113,10 +114,11 @@ impl UserDB {
   }
 
   fn _count_all_members(&self, conn: &Connection, table_name: &str) -> Result<usize, Error> {
-    let sql = &format!("select count(*) from {}", table_name);
+    let sql = &format!("select * from {}", table_name);
     let mut prep = conn.prepare(sql)?;
-    let row_num = prep.query_row(params![], |row| return row.get(0) as Result<usize>)?;
-    return Ok(row_num);
+    let rows = prep.query(params![])?;
+    let cnt = rows.count()?;
+    return Ok(cnt);
   }
 
   pub fn get_user(&self, search_key: UserSearchKey) -> Result<Option<UserInfo>, Error> {
@@ -236,5 +238,70 @@ impl UserDB {
     )?;
 
     Ok(())
+  }
+
+  pub fn add_refresh_token(
+    &self,
+    subscriber_id: &str,
+    refresh_token: &str,
+    expires: u64,
+    current: u64,
+  ) -> Result<(), Error> {
+    let conn = Connection::open(&self.db_file_path)?;
+
+    {
+      // add new refresh token
+      let sql = &format!(
+        "insert into {} (subscriber_id, refresh_token, expires) VALUES (?, ?, ?)",
+        &self.token_table_name
+      );
+
+      conn.execute(sql, params![subscriber_id, refresh_token, expires as u64])?;
+    }
+    {
+      // prune expired tokens
+      let sql = &format!(
+        "delete from {} where expires < {}",
+        &self.token_table_name, current
+      );
+      conn.execute(sql, params![])?;
+    }
+    conn.close().map_err(|(_, e)| anyhow!(e))?;
+
+    Ok(())
+  }
+
+  pub fn is_valid_refresh_token(
+    &self,
+    subscriber_id: &str,
+    refresh_token: &str,
+    current: u64,
+  ) -> Result<bool, Error> {
+    let conn = Connection::open(&self.db_file_path)?;
+
+    let valid = {
+      // search valid access token
+      let sql = &format!(
+        "select * from {} where subscriber_id='{}' and refresh_token='{}' and expires>{}",
+        &self.token_table_name, subscriber_id, refresh_token, current
+      );
+
+      let mut prep = conn.prepare(sql)?;
+      let rows = prep.query(params![])?;
+      let cnt = rows.count()?;
+      debug!("Exist {:?} matched token", cnt);
+      cnt > 0
+    };
+    {
+      // prune expired tokens
+      let sql = &format!(
+        "delete from {} where expires < {}",
+        &self.token_table_name, current
+      );
+      conn.execute(sql, params![])?;
+    }
+    conn.close().map_err(|(_, e)| anyhow!(e))?;
+
+    Ok(valid)
   }
 }

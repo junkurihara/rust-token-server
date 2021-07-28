@@ -1,46 +1,28 @@
 use crate::auth;
+use crate::constants::*;
 use crate::db::{UserInfo, UserSearchKey};
 use crate::error::*;
-use crate::jwt::{generate_jwt, Token, TokenMetaData};
+use crate::jwt::generate_jwt;
+use crate::request::PasswordCredentialRequest;
+use crate::response::{token_response_error, TokenResponse, TokenResponseBody};
 use crate::Globals;
+use chrono::Local;
 use rocket::http::{ContentType, Status};
-use rocket::serde::{json::Json, Deserialize, Serialize};
+use rocket::serde::{json::Json, Deserialize};
 use rocket::State;
 use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct PasswordCredential {
-  username: String,
-  password: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
 pub struct RequestBody {
-  auth: PasswordCredential,
+  auth: PasswordCredentialRequest,
   client_id: String,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub enum ResponseBody {
-  Access(TokenResponse),
-  Error(TokenError),
-}
-#[derive(Serialize, Debug, Clone)]
-pub struct TokenResponse {
-  token: Token,
-  metadata: TokenMetaData,
-  message: String,
-}
-#[derive(Serialize, Debug, Clone)]
-pub struct TokenError {
-  message: String,
 }
 
 #[post("/tokens", format = "application/json", data = "<request_body>")]
 pub fn tokens<'a>(
   request_body: Json<RequestBody>,
   globals: &State<Arc<Globals>>,
-) -> (Status, (ContentType, Json<ResponseBody>)) {
+) -> (Status, (ContentType, Json<TokenResponseBody>)) {
   // find user
   let login_info = request_body.auth.clone();
   let client_id = request_body.client_id.clone();
@@ -50,7 +32,7 @@ pub fn tokens<'a>(
   let user_info = match user_db.get_user(UserSearchKey::Username(&username)) {
     Err(e) => {
       error!("Failed to seek database: {}", e);
-      return error(503);
+      return token_response_error(Status::ServiceUnavailable);
     }
     Ok(s) => s,
   };
@@ -73,26 +55,26 @@ pub fn tokens<'a>(
               }
               Err(e) => {
                 error!("Failed to create token: {}", e);
-                return error(403);
+                return token_response_error(Status::Forbidden);
               }
             }
           } else {
             warn!("Invalid password is given for [{}]", username);
-            return error(403);
+            return token_response_error(Status::Unauthorized);
           }
         }
         Err(e) => {
           error!("Argon2 verification failed: {}", e);
-          return error(503);
+          return token_response_error(Status::ServiceUnavailable);
         }
       }
     } else {
       error!("Access from a client that is not allowed");
-      return error(403);
+      return token_response_error(Status::Forbidden);
     }
   } else {
     warn!("Non-registered username [{}] was attempted", username);
-    return error(400);
+    return token_response_error(Status::BadRequest);
   }
 }
 
@@ -100,49 +82,29 @@ pub fn access(
   info: &UserInfo,
   client_id: &str,
   globals: &State<Arc<Globals>>,
-) -> Result<(Status, (ContentType, Json<ResponseBody>)), Error> {
-  let (token, metadata) = generate_jwt(info, client_id, globals)?;
+) -> Result<(Status, (ContentType, Json<TokenResponseBody>)), Error> {
+  let (token, metadata) = generate_jwt(info, client_id, globals, true)?;
+  // generate refresh token? refresh token must be added to userdb if used
+  // Add database refresh token
+  let refresh_token = match &token.refresh {
+    None => bail!("refresh token is not generated"),
+    Some(t) => t,
+  };
+  let current: u64 = Local::now().timestamp() as u64;
+  let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
+  &globals
+    .user_db
+    .add_refresh_token(&info.get_subscriber_id(), refresh_token, expires, current);
+
   return Ok((
     Status::new(200),
     (
       ContentType::JSON,
-      Json(ResponseBody::Access(TokenResponse {
+      Json(TokenResponseBody::Access(TokenResponse {
         token,
         metadata,
-        message: "ok".to_string(),
+        message: "ok. login.".to_string(),
       })),
     ),
   ));
-}
-
-fn error(code: usize) -> (Status, (ContentType, Json<ResponseBody>)) {
-  match code {
-    500 => (
-      Status::new(500),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(TokenError {
-          message: "Server Fail".to_string(),
-        })),
-      ),
-    ),
-    403 => (
-      Status::new(403),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(TokenError {
-          message: "Authentication Error".to_string(),
-        })),
-      ),
-    ),
-    _ => (
-      Status::new(400),
-      (
-        ContentType::JSON,
-        Json(ResponseBody::Error(TokenError {
-          message: "Bad Request".to_string(),
-        })),
-      ),
-    ),
-  }
 }
