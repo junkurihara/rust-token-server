@@ -9,7 +9,7 @@ echo "init first"
 RUST_LOG=debug /opt/token-server/sbin/rust-token-server init \
   --admin-name ${ADMIN_NAME} \
   --admin-password ${ADMIN_PASSWORD} \
-  --db-file-path /opt/token-server/var/userdb.db
+  --db-file-path /opt/token-server/var/userdb.db \
   --client-ids ${CLIENT_IDS}
 
 echo "run the server"
