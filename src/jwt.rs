@@ -254,10 +254,10 @@ impl JwtSigningKey {
     let verified = match self {
       JwtSigningKey::ES256(sk) => sk
         .public_key()
-        .verify_token::<AdditionalClaimData>(token, None),
-      JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, None),
-      JwtSigningKey::HS384(k) => k.verify_token::<AdditionalClaimData>(token, None),
-      JwtSigningKey::HS512(k) => k.verify_token::<AdditionalClaimData>(token, None),
+        .verify_token::<AdditionalClaimData>(token, Some(options)),
+      JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
+      JwtSigningKey::HS384(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
+      JwtSigningKey::HS512(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
       _ => {
         bail!("Unsupported key");
       }
