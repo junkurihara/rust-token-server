@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -qy --no-install-recommends $BUILD_DEPS &&
     echo "Building token server from source" && \
     git clone https://github.com/junkurihara/rust-token-server token-server && \
     cd token-server && \
-    cargo build --release --no-default-features
-RUN mkdir -p /opt/token-server/sbin && \
+    cargo build --release --no-default-features && \
+    mkdir -p /opt/token-server/sbin && \
     ls /tmp/token-server/target/release && \
     mv /tmp/token-server/target/release/rust-token-server /opt/token-server/sbin/ && \
     strip --strip-all /opt/token-server/sbin/rust-token-server && \
