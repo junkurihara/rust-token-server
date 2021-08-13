@@ -1,8 +1,8 @@
-use crate::db::{UserInfo, UserSearchKey};
+use crate::db::UserInfo;
 use crate::error::*;
 use crate::jwt::{generate_jwt, AdditionalClaimData};
 use crate::request_bearer_token::*;
-use crate::response::{token_response_error, MessageResponse, TokenResponse, TokenResponseBody};
+use crate::response::{token_response_error, TokenResponse, TokenResponseBody};
 use crate::rocket_api_token_checkflow::check_token_and_db;
 use crate::Globals;
 use chrono::Local;

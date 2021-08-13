@@ -9,6 +9,7 @@ mod request;
 mod request_bearer_token;
 mod response;
 mod rocket_api_create_user;
+mod rocket_api_jwks;
 mod rocket_api_refresh;
 mod rocket_api_token_checkflow;
 mod rocket_api_tokens;
@@ -16,6 +17,7 @@ mod utils;
 use error::*;
 use globals::{Globals, Mode};
 use rocket_api_create_user::create_user;
+use rocket_api_jwks::jwks;
 use rocket_api_refresh::refresh;
 use rocket_api_tokens::tokens;
 
@@ -39,8 +41,8 @@ async fn main() -> Result<(), Error> {
     Mode::RUN => {
       if let Some(globals) = globals_opt {
         rocket::build()
-          .mount("/hello", routes![hello])
-          .mount("/v1.0", routes![tokens, create_user, refresh])
+          .mount("/hello", routes![hello]) // TODO: add healthcheck
+          .mount("/v1.0", routes![tokens, create_user, refresh, jwks])
           .manage(globals)
           .launch()
           .await?;

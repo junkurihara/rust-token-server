@@ -99,17 +99,17 @@ pub fn generate_jwt(
 #[derive(Debug, Clone)]
 pub enum Algorithm {
   ES256,
-  HS256,
-  HS384,
-  HS512,
+  // HS256,
+  // HS384,
+  // HS512,
 }
 impl FromStr for Algorithm {
   type Err = Error;
   fn from_str(s: &str) -> Result<Self, Error> {
     match s {
-      "HS256" => Ok(Algorithm::HS256),
-      "HS384" => Ok(Algorithm::HS384),
-      "HS512" => Ok(Algorithm::HS512),
+      // "HS256" => Ok(Algorithm::HS256),
+      // "HS384" => Ok(Algorithm::HS384),
+      // "HS512" => Ok(Algorithm::HS512),
       "ES256" => Ok(Algorithm::ES256),
       // "ES384" => Ok(Algorithm::ES384),
       // "RS256" => Ok(Algorithm::RS256),
@@ -139,9 +139,9 @@ impl Algorithm {
 
 pub enum JwtSigningKey {
   ES256(ES256KeyPair),
-  HS256(HS256Key),
-  HS384(HS384Key),
-  HS512(HS512Key),
+  // HS256(HS256Key),
+  // HS384(HS384Key),
+  // HS512(HS512Key),
 }
 
 impl JwtSigningKey {
@@ -151,27 +151,27 @@ impl JwtSigningKey {
     with_key_id: bool,
   ) -> Result<Self, Error> {
     let signing_key = match validation_algorithm {
-      Algorithm::HS256 => {
-        let mut k = HS256Key::from_bytes(key_str.as_ref());
-        if with_key_id {
-          k.create_key_id();
-        };
-        JwtSigningKey::HS256(k)
-      }
-      Algorithm::HS384 => {
-        let mut k = HS384Key::from_bytes(key_str.as_ref());
-        if with_key_id {
-          k.create_key_id();
-        };
-        JwtSigningKey::HS384(k)
-      }
-      Algorithm::HS512 => {
-        let mut k = HS512Key::from_bytes(key_str.as_ref());
-        if with_key_id {
-          k.create_key_id();
-        };
-        JwtSigningKey::HS512(k)
-      }
+      // Algorithm::HS256 => {
+      //   let mut k = HS256Key::from_bytes(key_str.as_ref());
+      //   if with_key_id {
+      //     k.create_key_id();
+      //   };
+      //   JwtSigningKey::HS256(k)
+      // }
+      // Algorithm::HS384 => {
+      //   let mut k = HS384Key::from_bytes(key_str.as_ref());
+      //   if with_key_id {
+      //     k.create_key_id();
+      //   };
+      //   JwtSigningKey::HS384(k)
+      // }
+      // Algorithm::HS512 => {
+      //   let mut k = HS512Key::from_bytes(key_str.as_ref());
+      //   if with_key_id {
+      //     k.create_key_id();
+      //   };
+      //   JwtSigningKey::HS512(k)
+      // }
       Algorithm::ES256 => {
         let private_key: Result<p256::SecretKey, p256::pkcs8::Error> =
           p256::pkcs8::FromPrivateKey::from_pkcs8_pem(key_str);
@@ -199,9 +199,9 @@ impl JwtSigningKey {
   ) -> Result<(String, String, String, String, Vec<String>), Error> {
     let generated_jwt = match self {
       JwtSigningKey::ES256(pk) => pk.sign(claims),
-      JwtSigningKey::HS256(pk) => pk.authenticate(claims),
-      JwtSigningKey::HS384(pk) => pk.authenticate(claims),
-      JwtSigningKey::HS512(pk) => pk.authenticate(claims),
+      // JwtSigningKey::HS256(pk) => pk.authenticate(claims),
+      // JwtSigningKey::HS384(pk) => pk.authenticate(claims),
+      // JwtSigningKey::HS512(pk) => pk.authenticate(claims),
       _ => {
         bail!("Unsupported key");
       }
@@ -255,9 +255,9 @@ impl JwtSigningKey {
       JwtSigningKey::ES256(sk) => sk
         .public_key()
         .verify_token::<AdditionalClaimData>(token, Some(options)),
-      JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
-      JwtSigningKey::HS384(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
-      JwtSigningKey::HS512(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
+      // JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
+      // JwtSigningKey::HS384(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
+      // JwtSigningKey::HS512(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
       _ => {
         bail!("Unsupported key");
       }
