@@ -6,6 +6,7 @@ use log::{debug, error, info, warn};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use rusqlite::{params, Connection, Result};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct UserInfo {
@@ -223,11 +224,7 @@ impl UserDB {
       self.user_table_name
     );
     let encoded_hash: &str = &generate_argon2(password)?;
-    let subscriber_id: String = thread_rng()
-      .sample_iter(&Alphanumeric)
-      .take(SUBSCRIBER_ID_LEN)
-      .map(char::from)
-      .collect();
+    let subscriber_id: String = Uuid::new_v4().to_string();
 
     debug!(
       "subscriber_id is created for {}: {}",
