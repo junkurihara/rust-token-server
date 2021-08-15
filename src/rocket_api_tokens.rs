@@ -92,9 +92,13 @@ pub fn access(
   };
   let current: u64 = Local::now().timestamp() as u64;
   let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
-  &globals
-    .user_db
-    .add_refresh_token(&info.get_subscriber_id(), refresh_token, expires, current);
+  &globals.user_db.add_refresh_token(
+    &info.get_subscriber_id(),
+    client_id,
+    refresh_token,
+    expires,
+    current,
+  );
 
   return Ok((
     Status::new(200),

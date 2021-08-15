@@ -82,6 +82,7 @@ impl UserDB {
       "create table if not exists {} (
           id integer primary key,
           subscriber_id text,
+          client_id text,
           refresh_token text,
           expires integer
         )",
@@ -243,6 +244,7 @@ impl UserDB {
   pub fn add_refresh_token(
     &self,
     subscriber_id: &str,
+    client_id: &str,
     refresh_token: &str,
     expires: u64,
     current: u64,
@@ -252,11 +254,14 @@ impl UserDB {
     {
       // add new refresh token
       let sql = &format!(
-        "insert into {} (subscriber_id, refresh_token, expires) VALUES (?, ?, ?)",
+        "insert into {} (subscriber_id, client_id, refresh_token, expires) VALUES (?, ?, ?, ?)",
         &self.token_table_name
       );
 
-      conn.execute(sql, params![subscriber_id, refresh_token, expires as u64])?;
+      conn.execute(
+        sql,
+        params![subscriber_id, client_id, refresh_token, expires as u64],
+      )?;
     }
     {
       // prune expired tokens
@@ -271,26 +276,38 @@ impl UserDB {
     Ok(())
   }
 
-  pub fn is_valid_refresh_token(
+  pub fn get_subid_for_refresh_token(
     &self,
-    subscriber_id: &str,
+    client_id: &str,
     refresh_token: &str,
     current: u64,
-  ) -> Result<bool, Error> {
+  ) -> Result<Option<String>, Error> {
     let conn = Connection::open(&self.db_file_path)?;
 
-    let valid = {
+    let subscriber_id = {
       // search valid access token
       let sql = &format!(
-        "select * from {} where subscriber_id='{}' and refresh_token='{}' and expires>{}",
-        &self.token_table_name, subscriber_id, refresh_token, current
+        "select * from {} where client_id='{}' and refresh_token='{}' and expires>{}",
+        &self.token_table_name, client_id, refresh_token, current
       );
 
-      let mut prep = conn.prepare(sql)?;
-      let rows = prep.query(params![])?;
-      let cnt = rows.count()?;
-      debug!("Exist {:?} matched token", cnt);
-      cnt > 0
+      // get sub id
+      #[derive(Debug)]
+      struct SubId(String);
+      let mut nexts = vec![];
+      {
+        let mut prep = conn.prepare(sql)?;
+        let mut rows = prep.query_map(params![], |row| Ok(SubId(row.get(1)?)))?;
+        while let Some(next) = rows.next() {
+          nexts.push(next?)
+        }
+      }
+      debug!("Exist refresh token for {:?} ", nexts);
+      if nexts.len() > 0 {
+        Some(nexts[0].0.clone())
+      } else {
+        None
+      }
     };
     {
       // prune expired tokens
@@ -302,6 +319,6 @@ impl UserDB {
     }
     conn.close().map_err(|(_, e)| anyhow!(e))?;
 
-    Ok(valid)
+    Ok(subscriber_id)
   }
 }
