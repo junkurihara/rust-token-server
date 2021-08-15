@@ -1,10 +1,7 @@
 use crate::auth::generate_argon2;
-use crate::constants::*;
 use crate::error::*;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use log::{debug, error, info, warn};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use rusqlite::{params, Connection, Result};
 use uuid::Uuid;
 
