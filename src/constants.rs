@@ -18,6 +18,6 @@ pub const ARGON2_CONFIG: Config = Config {
 };
 pub const ARGON2_SALT_LEN: usize = 32;
 
-pub const JWT_DURATION_MINS: usize = 30; // TODO: Clapで設定できるように
+pub const JWT_DURATION_MINS: usize = 365 * 24 * 60; // TODO: Clapで設定できるように
 pub const REFRESH_TOKEN_LEN: usize = 256;
-pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60; // TODO: 30days, clapで設定できるように
+pub const REFRESH_TOKEN_DURATION_MINS: usize = 730 * 24 * 60; // TODO: 2years, clapで設定できるように
