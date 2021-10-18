@@ -3,6 +3,7 @@ use argon2::{Config, ThreadMode, Variant, Version};
 pub const ALLOWED_CLIENT_TABLE_NAME: &str = "client_ids";
 pub const USER_TABLE_NAME: &str = "users";
 pub const TOKEN_TABLE_NAME: &str = "tokens";
+pub const EVENTLOG_TABLE_NAME: &str = "event_log";
 pub const DB_FILE_PATH: &str = "./users.db";
 
 pub const ARGON2_CONFIG: Config = Config {

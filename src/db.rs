@@ -1,4 +1,4 @@
-use crate::auth::generate_argon2;
+use crate::{auth::generate_argon2, utils};
 use crate::error::*;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use log::{debug, error, info, warn};
@@ -34,6 +34,7 @@ pub struct UserDB {
   pub user_table_name: String,
   pub allowed_client_table_name: String,
   pub token_table_name: String,
+  pub event_log_table_name: String,
   pub db_file_path: String,
 }
 
@@ -85,6 +86,33 @@ impl UserDB {
           expires integer
         )",
       &self.token_table_name
+    );
+    conn.execute(&sql, params![])?;
+
+    // event_log table
+    let sql = format!(
+      "create table if not exists {} (
+          rid integer primary key autoincrement,
+          subscriber_id text,
+          utime integer,
+          eid integer
+        )",
+      &self.event_log_table_name
+    );
+    conn.execute(&sql, params![])?;
+    let sql = format!(
+      "CREATE INDEX IF NOT EXISTS idx_event_log_subscriber_id ON {}(subscriber_id)",
+      &self.event_log_table_name
+    );
+    conn.execute(&sql, params![])?;
+    let sql = format!(
+      "CREATE INDEX IF NOT EXISTS idx_event_log_utime ON {}(utime);",
+      &self.event_log_table_name
+    );
+    conn.execute(&sql, params![])?;
+    let sql = format!(
+      "CREATE INDEX IF NOT EXISTS idx_event_log_eid ON {}(eid);",
+      &self.event_log_table_name
     );
     conn.execute(&sql, params![])?;
 
@@ -230,6 +258,26 @@ impl UserDB {
     conn.execute(
       sql,
       params![username, &subscriber_id, encoded_hash, admin_int],
+    )?;
+
+    Ok(())
+  }
+
+  pub fn add_event_log(&self, subscriber_id: &str, utime: u64, eid: u64) -> Result<(), Error> {
+    let conn = Connection::open(&self.db_file_path)?;
+    let res = self._add_event_log(&conn, subscriber_id, utime, eid);
+    conn.close().map_err(|(_, e)| anyhow!(e))?;
+    res
+  }
+
+  pub fn _add_event_log(&self, conn: &Connection, subscriber_id: &str, utime: u64, eid: u64) -> Result<(), Error> {
+    let sql = &format!(
+      "insert into {} (subscriber_id, utime, eid) VALUES (?, ?, ?)",
+      self.event_log_table_name
+    );
+    conn.execute(
+      sql,
+      params![&subscriber_id, utime, eid],
     )?;
 
     Ok(())

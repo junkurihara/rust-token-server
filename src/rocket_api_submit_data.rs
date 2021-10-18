@@ -1,4 +1,4 @@
-use crate::db::UserInfo;
+use crate::db::{UserInfo, UserDB};
 use crate::error::*;
 use crate::jwt::AdditionalClaimData;
 use crate::request_bearer_token::*;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RequestBody {
-  pub data: Vec<Vec<i64>>,
+  pub data: Vec<Vec<u64>>,
 }
 
 #[post("/submit_data", format = "application/json", data = "<request_body>")]
@@ -29,18 +29,41 @@ pub fn submit_data<'a>(
       Err(e) => return message_response_error(e),
     };
 
+  let data = request_body.into_inner().data;
+  let subscriber_id = info.get_subscriber_id();
   info!(
     "[Submitted data] Accepted: from {} ({}), Data {:?}",
     info.get_username(),
-    info.get_subscriber_id(),
-    request_body.into_inner().data
+    &subscriber_id,
+    &data
   );
 
-  if let Ok(res) = access(info.get_username(), info.get_subscriber_id()) {
-    return res;
-  } else {
-    error!("Failed to create user");
-    return message_response_error(Status::Forbidden);
+  let user_db = globals.user_db.clone();
+  let event_logs: Vec<Result<(), Error>> = data.iter().map( |elog| {
+    if elog.len() == 2 {
+      let utime: u64 = elog[0];
+      let eid: u64 = elog[1];
+      user_db.add_event_log(subscriber_id, utime, eid)
+    }
+    else {
+      Err(anyhow!("Invalid data"))
+    }
+  }).collect();
+  let result: Result<Vec<()>,Error> = event_logs.into_iter().collect();
+  println!("{:?}", result);
+  match result {
+    Ok(_) => {
+      if let Ok(res) = access(info.get_username(), info.get_subscriber_id()) {
+        return res;
+      } else {
+        error!("Failed to make response");
+        return message_response_error(Status::Forbidden);
+      }
+    },
+    Err(_) => {
+      error!("Failed to write all events");
+      return message_response_error(Status::BadRequest);
+    }
   }
 }
 

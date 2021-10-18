@@ -145,6 +145,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       db_file_path,
       user_table_name: USER_TABLE_NAME.to_string(),
       allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
+      event_log_table_name: EVENTLOG_TABLE_NAME.to_string(),
       token_table_name: TOKEN_TABLE_NAME.to_string(),
     };
     user_db.clone().init_db(None, None, vec![])?; // check db if it is already initialized.
@@ -189,6 +190,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       db_file_path,
       allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
       user_table_name: USER_TABLE_NAME.to_string(),
+      event_log_table_name: EVENTLOG_TABLE_NAME.to_string(),
       token_table_name: TOKEN_TABLE_NAME.to_string(),
     };
 
