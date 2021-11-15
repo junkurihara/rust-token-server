@@ -14,6 +14,7 @@ services:
       - ./.env:/opt/token-server/etc/.env
       - ${SIGNING_KEY_PATH}:/opt/token-server/etc/private_key.pem
       - ${DATA_DIR_PATH}:/opt/token-server/var/
+      - ${LOG_DIR}:/var/log/token-server/
     networks:
       net-front:
 
@@ -25,4 +26,4 @@ services:
   #     - /var/run/docker.sock:/var/run/docker.sock
 networks:
   net-front:
-    external: true
+    # external: true
