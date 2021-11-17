@@ -18,6 +18,19 @@ SUBCOMMANDS:
     run
 ```
 
+Before running the server, EC (P256) key pair must be prepared as:
+
+```
+# generate a keypair (actually this is a private key)
+$ openssl ecparam -genkey -name prime256v1 -noout -out keyapir.pem
+
+# extract its private key in PKCS8 format
+$ openssl pkcs8 -in keypair.pem -out private_key.pem -topk8 -nocrypt
+
+# extract its public key
+$ openssl ec -in keypair.pem -pubout > public_key.pem
+```
+
 Initialization for DB (required only once)
 
 ```
