@@ -10,6 +10,8 @@ services:
     ports:
       - 8000:8000/udp
       - 8000:8000/tcp
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:8000/health || exit 1"]
     volumes:
       - ./.env:/opt/token-server/etc/.env
       - ${SIGNING_KEY_PATH}:/opt/token-server/etc/private_key.pem

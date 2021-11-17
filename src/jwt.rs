@@ -126,7 +126,7 @@ impl FromStr for Algorithm {
 pub enum AlgorithmType {
   ECC,
   HMAC,
-  RSA,
+  // RSA,
 }
 impl Algorithm {
   pub fn get_type(&self) -> AlgorithmType {
@@ -202,9 +202,9 @@ impl JwtSigningKey {
       // JwtSigningKey::HS256(pk) => pk.authenticate(claims),
       // JwtSigningKey::HS384(pk) => pk.authenticate(claims),
       // JwtSigningKey::HS512(pk) => pk.authenticate(claims),
-      _ => {
-        bail!("Unsupported key");
-      }
+      // _ => {
+      //   bail!("Unsupported key");
+      // }
     }?;
     // get token info
     let parsed: Vec<&str> = (&generated_jwt).split(".").collect();
@@ -258,9 +258,9 @@ impl JwtSigningKey {
       // JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
       // JwtSigningKey::HS384(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
       // JwtSigningKey::HS512(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
-      _ => {
-        bail!("Unsupported key");
-      }
+      // _ => {
+      //   bail!("Unsupported key");
+      // }
     };
 
     return verified;

@@ -92,23 +92,28 @@ pub fn access(
   };
   let current: u64 = Local::now().timestamp() as u64;
   let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
-  &globals.user_db.add_refresh_token(
+  match &globals.user_db.add_refresh_token(
     &info.get_subscriber_id(),
     client_id,
     refresh_token,
     expires,
     current,
-  );
-
-  return Ok((
-    Status::new(200),
-    (
-      ContentType::JSON,
-      Json(TokenResponseBody::Access(TokenResponse {
-        token,
-        metadata,
-        message: "ok. login.".to_string(),
-      })),
-    ),
-  ));
+  ) {
+    Ok(_) => {
+      return Ok((
+        Status::new(200),
+        (
+          ContentType::JSON,
+          Json(TokenResponseBody::Access(TokenResponse {
+            token,
+            metadata,
+            message: "ok. login.".to_string(),
+          })),
+        ),
+      ));
+    }
+    Err(_) => {
+      bail!("refresh token cannot be stored. maybe db failure.")
+    }
+  };
 }

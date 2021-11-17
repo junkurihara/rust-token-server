@@ -4,6 +4,7 @@ mod constants;
 mod db;
 mod error;
 mod globals;
+mod health_check;
 mod jwt;
 mod request;
 mod request_bearer_token;
@@ -16,6 +17,7 @@ mod rocket_api_tokens;
 mod utils;
 use error::*;
 use globals::{Globals, Mode};
+use health_check::health;
 use rocket_api_create_user::create_user;
 use rocket_api_jwks::jwks;
 use rocket_api_refresh::refresh;
@@ -27,11 +29,6 @@ extern crate clap;
 #[macro_use]
 extern crate rocket;
 
-#[get("/")]
-fn hello() -> String {
-  format!("hello!")
-}
-
 #[rocket::main]
 async fn main() -> Result<(), Error> {
   env_logger::init();
@@ -41,7 +38,7 @@ async fn main() -> Result<(), Error> {
     Mode::RUN => {
       if let Some(globals) = globals_opt {
         rocket::build()
-          .mount("/hello", routes![hello]) // TODO: add healthcheck
+          .mount("/health", routes![health])
           .mount("/v1.0", routes![tokens, create_user, refresh, jwks])
           .manage(globals)
           .launch()
