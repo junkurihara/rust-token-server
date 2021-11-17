@@ -31,7 +31,7 @@ $ openssl pkcs8 -in keypair.pem -out private_key.pem -topk8 -nocrypt
 $ openssl ec -in keypair.pem -pubout > public_key.pem
 ```
 
-Initialization for DB (required only once)
+Initialization for DB (required only once):
 
 ```
 USAGE:
@@ -49,7 +49,9 @@ OPTIONS:
     -d, --db-file-path <db_file_path>        SQLite database file path [default: ./users.db]
 ```
 
-Run the token server
+Here we should note that client ID's are required, which are treated as "Application IDs".
+
+Run the token server:
 
 ```
 USAGE:
@@ -101,4 +103,30 @@ curl -i -X POST \
   -H "Content-Type: application/json" \
   -d '{ "auth": {"username": "<new_user_name>", "password": "<new_user_password>"}}' \
   http://localhost:8000/v1.0/create_user
+```
+
+### JWKs to retrieve the public key by clients
+
+This is called by clients when ID tokens are verified.
+
+
+```
+http://<your_domain>:<your_port>/v1.0/jwks
+```
+
+### refresh ID tokens
+
+ID tokens can be refreshed by sending refresh token.
+
+```
+http://<your_domain>:<your_port>/v1.0/refresh
+```
+
+e.g., 
+
+```
+curl -i -X POST \
+  -H "Content-Type: application/json" \
+  -d '{ "refresh_token": "<refresh_token>", "client_id": "<client_id>" }'
+  http://localhost:8000/v1.0/refresh
 ```
