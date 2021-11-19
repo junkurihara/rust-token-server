@@ -119,7 +119,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
           match algorithm.get_type() {
             AlgorithmType::HMAC => {
               let truncate_vec: Vec<&str> = content.split("\n").collect();
-              ensure!(truncate_vec.len() > 0, true);
+              ensure!(truncate_vec.len() > 0, "Invalid (maybe null) signing key");
               JwtSigningKey::new(&algorithm, &truncate_vec[0], with_key_id)?
             }
             _ => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
