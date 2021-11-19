@@ -1,6 +1,12 @@
 [package]
 name = "rust-token-server"
+description = "Authentication server handling id token in the context of OIDC"
 version = "0.1.0"
+authors = ["Jun Kurihara"]
+homepage = "https://github.com/junkurihara/rust-token-server"
+repository = "https://github.com/junkurihara/rust-token-server"
+license = "MIT"
+readme = "README.md"
 edition = "2018"
 publish = false
 
