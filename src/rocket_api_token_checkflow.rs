@@ -29,7 +29,7 @@ pub fn check_token_and_db(
   let user_db = globals.user_db.clone();
   let info: UserInfo = match &claims.subject {
     Some(sub) => {
-      let info: UserInfo = match user_db.get_user(UserSearchKey::SubscriberId(&sub)) {
+      let info: UserInfo = match user_db.get_user(UserSearchKey::SubscriberId(sub)) {
         Err(e) => {
           error!("Failed to get user info: {}", e);
           return Err(Status::ServiceUnavailable);

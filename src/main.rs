@@ -35,7 +35,7 @@ async fn main() -> Result<(), Error> {
 
   let (mode, globals_opt) = config::parse_opts()?;
   match mode {
-    Mode::RUN => {
+    Mode::Run => {
       if let Some(globals) = globals_opt {
         rocket::build()
           .mount("/health", routes![health])

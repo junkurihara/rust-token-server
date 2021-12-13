@@ -17,7 +17,7 @@ pub struct RequestBody {
 }
 
 #[post("/refresh", format = "application/json", data = "<request_body>")]
-pub fn refresh<'a>(
+pub fn refresh(
   request_body: Json<RequestBody>,
   globals: &State<Arc<Globals>>,
 ) -> (Status, (ContentType, Json<TokenResponseBody>)) {
@@ -60,11 +60,11 @@ pub fn refresh<'a>(
 
   match access(&info, &client_id, globals) {
     Ok(res) => {
-      return res;
+      res
     }
     Err(e) => {
       error!("Failed to create token: {}", e);
-      return token_response_error(Status::Forbidden);
+      token_response_error(Status::Forbidden)
     }
   }
 }
@@ -75,7 +75,7 @@ pub fn access(
   globals: &State<Arc<Globals>>,
 ) -> Result<(Status, (ContentType, Json<TokenResponseBody>)), Error> {
   let (token, metadata) = generate_jwt(info, client_id, globals, false)?;
-  return Ok((
+  Ok((
     Status::new(200),
     (
       ContentType::JSON,
@@ -85,5 +85,5 @@ pub fn access(
         message: "ok. token is refreshed.".to_string(),
       })),
     ),
-  ));
+  ))
 }

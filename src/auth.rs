@@ -1,6 +1,5 @@
 use crate::constants::{ARGON2_CONFIG, ARGON2_SALT_LEN};
 use crate::error::*;
-use argon2;
 use rand::prelude::*;
 
 pub fn generate_argon2(password: &str) -> Result<String, Error> {

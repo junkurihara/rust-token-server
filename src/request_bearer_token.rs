@@ -19,7 +19,7 @@ impl<'r> FromRequest<'r> for BearerToken {
       Some(token) => {
         // check validity
         // Check authorization header first;
-        let jwt: Vec<&str> = token.split(" ").collect();
+        let jwt: Vec<&str> = token.split(' ').collect();
         if jwt[0] != "Bearer" || jwt.len() != 2 {
           warn!("Invalid bearer token");
           return Outcome::Failure((Status::BadRequest, anyhow!("Invalid bearer token")));

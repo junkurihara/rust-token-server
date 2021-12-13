@@ -38,17 +38,15 @@ pub fn jwks(globals: &State<Arc<Globals>>) -> (Status, (ContentType, Json<Jwks>)
       };
       if let Some(id) = kid {
         val["kid"] = serde_json::Value::String(id.to_string());
-        val
-      } else {
-        val
       }
+      val
     }
   };
 
   let jwks = vec![current_public_jwk];
 
-  return (
+  (
     Status::new(200),
     (ContentType::JSON, Json(Jwks { keys: Some(jwks) })),
-  );
+  )
 }

@@ -10,7 +10,7 @@ pub struct Globals {
 }
 
 pub enum Mode {
-  RUN,
-  INIT,
-  NONE,
+  Run,
+  Init,
+  None,
 }

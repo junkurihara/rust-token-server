@@ -2,10 +2,8 @@ use crate::constants::*;
 use crate::db::UserInfo;
 use crate::error::*;
 use crate::globals::Globals;
-use base64;
 use chrono::{DateTime, Local, TimeZone};
 use jwt_simple::prelude::*;
-use p256;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use rocket::serde::Serialize;
@@ -124,15 +122,15 @@ impl FromStr for Algorithm {
 }
 #[derive(Debug, Clone)]
 pub enum AlgorithmType {
-  ECC,
-  HMAC,
+  Ecc,
+  Hmac,
   // RSA,
 }
 impl Algorithm {
   pub fn get_type(&self) -> AlgorithmType {
     match self {
-      Algorithm::ES256 => AlgorithmType::ECC,
-      _ => AlgorithmType::HMAC,
+      Algorithm::ES256 => AlgorithmType::Ecc,
+      _ => AlgorithmType::Hmac,
     }
   }
 }
@@ -207,7 +205,7 @@ impl JwtSigningKey {
       // }
     }?;
     // get token info
-    let parsed: Vec<&str> = (&generated_jwt).split(".").collect();
+    let parsed: Vec<&str> = (&generated_jwt).split('.').collect();
     let decoded_claims = base64::decode(parsed[1])?;
     // debug!("{:?}", String::from_utf8(base64::decode(parsed[0])?)?);
     let json_string = String::from_utf8(decoded_claims)?;
@@ -231,13 +229,13 @@ impl JwtSigningKey {
 
     let issued_at: DateTime<Local> = Local.timestamp(iat, 0);
     let expires: DateTime<Local> = Local.timestamp(exp, 0);
-    return Ok((
+    Ok((
       generated_jwt,
       issued_at.to_string(),
       expires.to_string(),
       iss,
       aud,
-    ));
+    ))
   }
 
   pub fn verify_token(
@@ -247,11 +245,11 @@ impl JwtSigningKey {
   ) -> Result<JWTClaims<AdditionalClaimData>, Error> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = &globals.allowed_client_ids {
-      options.allowed_audiences = Some(HashSet::from_strings(&allowed));
+      options.allowed_audiences = Some(HashSet::from_strings(allowed));
     }
-    options.allowed_issuers = Some(HashSet::from_strings(&vec![&globals.token_issuer]));
+    options.allowed_issuers = Some(HashSet::from_strings(&[&globals.token_issuer]));
     // debug!("options: {:?}", options);
-    let verified = match self {
+    match self {
       JwtSigningKey::ES256(sk) => sk
         .public_key()
         .verify_token::<AdditionalClaimData>(token, Some(options)),
@@ -261,8 +259,6 @@ impl JwtSigningKey {
       // _ => {
       //   bail!("Unsupported key");
       // }
-    };
-
-    return verified;
+    }
   }
 }

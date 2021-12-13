@@ -19,7 +19,7 @@ pub struct RequestBody {
 }
 
 #[post("/tokens", format = "application/json", data = "<request_body>")]
-pub fn tokens<'a>(
+pub fn tokens(
   request_body: Json<RequestBody>,
   globals: &State<Arc<Globals>>,
 ) -> (Status, (ContentType, Json<TokenResponseBody>)) {
@@ -51,30 +51,30 @@ pub fn tokens<'a>(
           if v {
             match access(&info, &client_id, globals) {
               Ok(res) => {
-                return res;
+                res
               }
               Err(e) => {
                 error!("Failed to create token: {}", e);
-                return token_response_error(Status::Forbidden);
+                token_response_error(Status::Forbidden)
               }
             }
           } else {
             warn!("Invalid password is given for [{}]", username);
-            return token_response_error(Status::Unauthorized);
+            token_response_error(Status::Unauthorized)
           }
         }
         Err(e) => {
           error!("Argon2 verification failed: {}", e);
-          return token_response_error(Status::ServiceUnavailable);
+          token_response_error(Status::ServiceUnavailable)
         }
       }
     } else {
       error!("Access from a client that is not allowed");
-      return token_response_error(Status::Forbidden);
+      token_response_error(Status::Forbidden)
     }
   } else {
     warn!("Non-registered username [{}] was attempted", username);
-    return token_response_error(Status::BadRequest);
+    token_response_error(Status::BadRequest)
   }
 }
 
@@ -93,14 +93,14 @@ pub fn access(
   let current: u64 = Local::now().timestamp() as u64;
   let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
   match &globals.user_db.add_refresh_token(
-    &info.get_subscriber_id(),
+    info.get_subscriber_id(),
     client_id,
     refresh_token,
     expires,
     current,
   ) {
     Ok(_) => {
-      return Ok((
+      Ok((
         Status::new(200),
         (
           ContentType::JSON,
@@ -110,10 +110,10 @@ pub fn access(
             message: "ok. login.".to_string(),
           })),
         ),
-      ));
+      ))
     }
     Err(_) => {
       bail!("refresh token cannot be stored. maybe db failure.")
     }
-  };
+  }
 }

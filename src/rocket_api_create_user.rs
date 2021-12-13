@@ -18,7 +18,7 @@ pub struct RequestBody {
 }
 
 #[post("/create_user", format = "application/json", data = "<request_body>")]
-pub fn create_user<'a>(
+pub fn create_user(
   request_body: Json<RequestBody>,
   bearer_token: BearerToken,
   globals: &State<Arc<Globals>>,
@@ -82,22 +82,22 @@ pub fn create_user<'a>(
   match user_db.add_user(&username, &password, false) {
     Err(e) => {
       error!("Failed to add new user: {}", e);
-      return message_response_error(Status::ServiceUnavailable);
+      message_response_error(Status::ServiceUnavailable)
     }
     Ok(_) => {
       info!("Add a new standard user: {}", username);
       if let Ok(res) = access() {
-        return res;
+        res
       } else {
         error!("Failed to create user");
-        return message_response_error(Status::Forbidden);
+        message_response_error(Status::Forbidden)
       }
     }
-  };
+  }
 }
 
 pub fn access() -> Result<(Status, (ContentType, Json<MessageResponseBody>)), Error> {
-  return Ok((
+  Ok((
     Status::Created,
     (
       ContentType::JSON,
@@ -105,5 +105,5 @@ pub fn access() -> Result<(Status, (ContentType, Json<MessageResponseBody>)), Er
         message: "ok. new user is created.".to_string(),
       })),
     ),
-  ));
+  ))
 }

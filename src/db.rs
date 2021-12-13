@@ -15,16 +15,16 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-  pub fn get_encoded_hash<'a>(&'a self) -> &'a str {
+  pub fn get_encoded_hash(&self) -> &str {
     &self.encoded_hash
   }
-  pub fn is_admin<'a>(&'a self) -> &'a bool {
+  pub fn is_admin(&self) -> &bool {
     &self.is_admin
   }
-  pub fn get_username<'a>(&'a self) -> &'a str {
+  pub fn get_username(&self) -> &str {
     &self.username
   }
-  pub fn get_subscriber_id<'a>(&'a self) -> &'a str {
+  pub fn get_subscriber_id(&self) -> &str {
     &self.subscriber_id
   }
 }
@@ -117,7 +117,7 @@ impl UserDB {
     let mut prep = conn.prepare(sql)?;
     let rows = prep.query(params![])?;
     let cnt = rows.count()?;
-    return Ok(cnt);
+    Ok(cnt)
   }
 
   pub fn get_user(&self, search_key: UserSearchKey) -> Result<Option<UserInfo>, Error> {
@@ -155,17 +155,17 @@ impl UserDB {
     let user_info = rows.next();
 
     // duplication check
-    if let Some(_) = rows.next() {
+    if rows.next().is_some() {
       bail!("Database is corrupted, duplicated usernames");
     }
 
     match user_info {
       Some(x) => {
         let res = x?;
-        return Ok(Some(res));
+        Ok(Some(res))
       }
       None => {
-        return Ok(None);
+        Ok(None)
       }
     }
   }
@@ -177,8 +177,8 @@ impl UserDB {
     let mut nexts = vec![];
     {
       let mut prep = conn.prepare(sql)?;
-      let mut rows = prep.query_map(params![], |row| Ok(row.get(1)?))?;
-      while let Some(next) = rows.next() {
+      let rows = prep.query_map(params![], |row| row.get(1))?;
+      for next in rows {
         nexts.push(next?)
       }
     }
@@ -187,7 +187,7 @@ impl UserDB {
     Ok(nexts)
   }
 
-  fn _add_client_ids(&self, conn: &Connection, client_ids: &Vec<&str>) -> Result<(), Error> {
+  fn _add_client_ids(&self, conn: &Connection, client_ids: &[&str]) -> Result<(), Error> {
     let sql = &format!(
       "insert into {} (client_id) VALUES (?)",
       &self.allowed_client_table_name
@@ -291,13 +291,13 @@ impl UserDB {
       let mut nexts = vec![];
       {
         let mut prep = conn.prepare(sql)?;
-        let mut rows = prep.query_map(params![], |row| Ok(SubId(row.get(1)?)))?;
-        while let Some(next) = rows.next() {
+        let rows = prep.query_map(params![], |row| Ok(SubId(row.get(1)?)))?;
+        for next in rows {
           nexts.push(next?)
         }
       }
       debug!("Exist refresh token for {:?} ", nexts);
-      if nexts.len() > 0 {
+      if !nexts.is_empty() {
         Some(nexts[0].0.clone())
       } else {
         None
