@@ -172,9 +172,9 @@ impl JwtSigningKey {
       // }
       Algorithm::ES256 => {
         let private_key: Result<p256::SecretKey, p256::pkcs8::Error> =
-          p256::pkcs8::FromPrivateKey::from_pkcs8_pem(key_str);
+          p256::pkcs8::DecodePrivateKey::from_pkcs8_pem(key_str);
         if let Ok(unwrapped) = private_key {
-          let keypair = ES256KeyPair::from_bytes(&unwrapped.to_bytes())?;
+          let keypair = ES256KeyPair::from_bytes(&unwrapped.to_be_bytes())?;
           if with_key_id {
             let mut pk = keypair.public_key();
             JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
