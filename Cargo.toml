@@ -14,7 +14,7 @@ publish = false
 
 [dependencies]
 rocket = { version = "0.5.0-rc.1", features = ["json"] }
-serde = "1.0.131"
+serde = "1.0.132"
 rusqlite = "0.26.3"
 anyhow = "1.0.51"
 rust-argon2 = "0.8.3"
