@@ -16,16 +16,16 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
     .subcommand(
       App::new("run")
         .arg(
-          Arg::with_name("signing_key_path")
-            .short("s")
+          Arg::new("signing_key_path")
+            .short('s')
             .long("signing-key-path")
             .takes_value(true)
             .required(true)
             .help("Signing key file path"),
         )
         .arg(
-          Arg::with_name("signing_algorithm")
-            .short("a")
+          Arg::new("signing_algorithm")
+            .short('a')
             .long("signing-algorithm")
             .takes_value(true)
             .required(true)
@@ -33,28 +33,28 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .help("Signing algorithm of JWT like \"ES256\""),
         )
         .arg(
-          Arg::with_name("db_file_path")
-            .short("d")
+          Arg::new("db_file_path")
+            .short('d')
             .long("db-file-path")
             .takes_value(true)
             .default_value(DB_FILE_PATH)
             .help("SQLite database file path"),
         )
         .arg(
-          Arg::with_name("with_key_id")
-            .short("i")
+          Arg::new("with_key_id")
+            .short('i')
             .long("with-key-id")
             .help("Include key id in JWT"),
         )
         .arg(
-          Arg::with_name("ignore_client_id")
-            .short("o")
+          Arg::new("ignore_client_id")
+            .short('o')
             .long("ignore-client-id")
             .help("Ignore checking client id in token request"),
         )
         .arg(
-          Arg::with_name("token_issuer")
-            .short("t")
+          Arg::new("token_issuer")
+            .short('t')
             .long("token-issuer")
             .required(true)
             .validator(verify_url)
@@ -65,32 +65,32 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
     .subcommand(
       App::new("init")
         .arg(
-          Arg::with_name("db_file_path")
-            .short("d")
+          Arg::new("db_file_path")
+            .short('d')
             .long("db-file-path")
             .takes_value(true)
             .default_value(DB_FILE_PATH)
             .help("SQLite database file path"),
         )
         .arg(
-          Arg::with_name("admin_name")
-            .short("n")
+          Arg::new("admin_name")
+            .short('n')
             .long("admin-name")
             .required(true)
             .takes_value(true)
             .help("SQLite database admin name"),
         )
         .arg(
-          Arg::with_name("admin_password")
-            .short("p")
+          Arg::new("admin_password")
+            .short('p')
             .long("admin-password")
             .takes_value(true)
             .required(true)
             .help("SQLite database admin password"),
         )
         .arg(
-          Arg::with_name("client_ids")
-            .short("c")
+          Arg::new("client_ids")
+            .short('c')
             .long("client-ids")
             .takes_value(true)
             .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\""),
