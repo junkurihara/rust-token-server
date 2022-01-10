@@ -28,7 +28,6 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
             .short('a')
             .long("signing-algorithm")
             .takes_value(true)
-            .required(true)
             .default_value("ES256")
             .help("Signing algorithm of JWT like \"ES256\""),
         )
