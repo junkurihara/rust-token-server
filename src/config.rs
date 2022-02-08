@@ -99,7 +99,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
 
   let matches = options.get_matches();
 
-  if let Some(ref matches) = matches.subcommand_matches("run") {
+  if let Some(matches) = matches.subcommand_matches("run") {
     let algorithm: Algorithm = match matches.value_of("signing_algorithm") {
       Some(a) => match Algorithm::from_str(a) {
         Ok(ao) => ao,
@@ -118,9 +118,9 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
         if let Ok(content) = fs::read_to_string(p) {
           match algorithm.get_type() {
             AlgorithmType::HMAC => {
-              let truncate_vec: Vec<&str> = content.split("\n").collect();
-              ensure!(truncate_vec.len() > 0, true);
-              JwtSigningKey::new(&algorithm, &truncate_vec[0], with_key_id)?
+              let truncate_vec: Vec<&str> = content.split('\n').collect();
+              ensure!(!truncate_vec.is_empty(), "{}", true);
+              JwtSigningKey::new(&algorithm, truncate_vec[0], with_key_id)?
             }
             _ => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
           }
@@ -152,7 +152,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
 
     // read client ids
     let ignore_client_id = matches.is_present("ignore_client_id");
-    let client_ids = user_db.clone().get_all_allowed_client_ids()?;
+    let client_ids = user_db.get_all_allowed_client_ids()?;
     if !ignore_client_id {
       info!("allowed_client_ids {:?}", client_ids);
     }
@@ -177,7 +177,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
     });
 
     Ok((Mode::RUN, Some(globals)))
-  } else if let Some(ref matches) = matches.subcommand_matches("init") {
+  } else if let Some(matches) = matches.subcommand_matches("init") {
     let db_file_path: String = match matches.value_of("db_file_path") {
       Some(p) => p.to_string(),
       None => {
@@ -202,7 +202,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
       Some(cids) => user_db.init_db(
         admin_name,
         admin_password,
-        cids.split(",").collect::<Vec<&str>>(),
+        cids.split(',').collect::<Vec<&str>>(),
       )?,
       None => user_db.init_db(admin_name, admin_password, vec![])?,
     }
