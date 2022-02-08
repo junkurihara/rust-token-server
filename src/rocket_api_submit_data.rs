@@ -24,7 +24,7 @@ pub fn submit_data<'a>(
   globals: &State<Arc<Globals>>,
 ) -> (Status, (ContentType, Json<MessageResponseBody>)) {
   let (info, _claims): (UserInfo, JWTClaims<AdditionalClaimData>) =
-    match check_token_and_db(globals, bearer_token, true) {
+    match check_token_and_db(globals, bearer_token, false) {
       Ok(i) => i,
       Err(e) => return message_response_error(e),
     };
