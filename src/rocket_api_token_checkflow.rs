@@ -52,7 +52,7 @@ pub fn check_token_and_db(
   };
 
   // check admin flag in DB etc to verify access as an id token
-  if !*info.is_admin() {
+  if admin_required && !*info.is_admin() {
     warn!("In DB, requested user is not registered as admin");
     return Err(Status::BadRequest);
   }
