@@ -7,7 +7,7 @@ homepage = "https://github.com/junkurihara/rust-token-server"
 repository = "https://github.com/junkurihara/rust-token-server"
 license = "MIT"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,12 +16,12 @@ publish = false
 rocket = { version = "0.5.0-rc.1", features = ["json"] }
 serde = "1.0.136"
 rusqlite = "0.26.3"
-anyhow = "1.0.53"
+anyhow = "1.0.55"
 rust-argon2 = "1.0.0"
-rand = "0.8.4"
+rand = "0.8.5"
 env_logger = "0.9.0"
 log = "0.4.14"
-clap = { version = "3.0.14", default-features = false, features = [
+clap = { version = "3.1.1", default-features = false, features = [
   "std",
   "cargo",
   "wrap_help",
@@ -29,7 +29,7 @@ clap = { version = "3.0.14", default-features = false, features = [
 p256 = { version = "0.10.1", features = ["pem", "jwk", "default"] }
 jwt-simple = "0.10.8"
 base64 = "0.13.0"
-serde_json = "1.0.78"
+serde_json = "1.0.79"
 chrono = "0.4.19"
 url = "2.2.2"
 fallible-streaming-iterator = "0.1.9"
