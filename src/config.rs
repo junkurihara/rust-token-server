@@ -3,7 +3,7 @@ use crate::db::UserDB;
 use crate::error::*;
 use crate::globals::{Globals, Mode};
 use crate::jwt::{Algorithm, AlgorithmType, JwtSigningKey};
-use clap::{App, Arg};
+use clap::{command, Arg, Command};
 use std::fs;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,9 +12,9 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
   use crate::utils::verify_url;
 
   let _ = include_str!("../Cargo.toml");
-  let options = app_from_crate!()
+  let options = command!()
     .subcommand(
-      App::new("run")
+      Command::new("run")
         .arg(
           Arg::new("signing_key_path")
             .short('s')
@@ -62,7 +62,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
         ),
     )
     .subcommand(
-      App::new("init")
+      Command::new("init")
         .arg(
           Arg::new("db_file_path")
             .short('d')

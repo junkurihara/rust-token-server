@@ -24,9 +24,6 @@ use rocket_api_refresh::refresh;
 use rocket_api_tokens::tokens;
 
 #[macro_use]
-extern crate clap;
-
-#[macro_use]
 extern crate rocket;
 
 #[rocket::main]
@@ -37,7 +34,7 @@ async fn main() -> Result<(), Error> {
   match mode {
     Mode::Run => {
       if let Some(globals) = globals_opt {
-        rocket::build()
+        let _ = rocket::build()
           .mount("/health", routes![health])
           .mount("/v1.0", routes![tokens, create_user, refresh, jwks])
           .manage(globals)
