@@ -1,15 +1,19 @@
-use crate::db::UserInfo;
-use crate::error::*;
-use crate::jwt::AdditionalClaimData;
-use crate::request::PasswordCredentialRequest;
-use crate::request_bearer_token::*;
-use crate::response::{message_response_error, MessageResponse, MessageResponseBody};
-use crate::rocket_api_token_checkflow::check_token_and_db;
-use crate::Globals;
+use crate::{
+  db::UserInfo,
+  error::*,
+  jwt::AdditionalClaimData,
+  request::PasswordCredentialRequest,
+  request_bearer_token::*,
+  response::{message_response_error, MessageResponse, MessageResponseBody},
+  rocket_api_token_checkflow::check_token_and_db,
+  Globals,
+};
 use jwt_simple::prelude::*;
-use rocket::http::{ContentType, Status};
-use rocket::serde::{json::Json, Deserialize};
-use rocket::State;
+use rocket::{
+  http::{ContentType, Status},
+  serde::{json::Json, Deserialize},
+  State,
+};
 use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -96,7 +100,7 @@ pub fn create_user(
   }
 }
 
-pub fn access() -> Result<(Status, (ContentType, Json<MessageResponseBody>)), Error> {
+pub fn access() -> Result<(Status, (ContentType, Json<MessageResponseBody>))> {
   Ok((
     Status::Created,
     (

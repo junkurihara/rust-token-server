@@ -1,10 +1,11 @@
-use crate::jwt::JwtSigningKey;
-use crate::Globals;
+use crate::{jwt::JwtSigningKey, Globals};
 use jwt_simple::algorithms::ECDSAP256PublicKeyLike;
 use p256::PublicKey;
-use rocket::http::{ContentType, Status};
-use rocket::serde::{json::Json, Serialize};
-use rocket::State;
+use rocket::{
+  http::{ContentType, Status},
+  serde::{json::Json, Serialize},
+  State,
+};
 use std::sync::Arc;
 
 #[derive(Serialize)]

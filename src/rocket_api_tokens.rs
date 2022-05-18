@@ -1,15 +1,19 @@
-use crate::auth;
-use crate::constants::*;
-use crate::db::{UserInfo, UserSearchKey};
-use crate::error::*;
-use crate::jwt::generate_jwt;
-use crate::request::PasswordCredentialRequest;
-use crate::response::{token_response_error, TokenResponse, TokenResponseBody};
-use crate::Globals;
+use crate::{
+  auth,
+  constants::*,
+  db::{UserInfo, UserSearchKey},
+  error::*,
+  jwt::generate_jwt,
+  request::PasswordCredentialRequest,
+  response::{token_response_error, TokenResponse, TokenResponseBody},
+  Globals,
+};
 use chrono::Local;
-use rocket::http::{ContentType, Status};
-use rocket::serde::{json::Json, Deserialize};
-use rocket::State;
+use rocket::{
+  http::{ContentType, Status},
+  serde::{json::Json, Deserialize},
+  State,
+};
 use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -50,9 +54,7 @@ pub fn tokens(
         Ok(v) => {
           if v {
             match access(&info, &client_id, globals) {
-              Ok(res) => {
-                res
-              }
+              Ok(res) => res,
               Err(e) => {
                 error!("Failed to create token: {}", e);
                 token_response_error(Status::Forbidden)
@@ -92,28 +94,26 @@ pub fn access(
   };
   let current: u64 = Local::now().timestamp() as u64;
   let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
-  match &globals.user_db.add_refresh_token(
-    info.get_subscriber_id(),
-    client_id,
-    refresh_token,
-    expires,
-    current,
-  ) {
-    Ok(_) => {
-      Ok((
-        Status::new(200),
-        (
-          ContentType::JSON,
-          Json(TokenResponseBody::Access(TokenResponse {
-            token,
-            metadata,
-            message: "ok. login.".to_string(),
-          })),
-        ),
-      ))
-    }
-    Err(_) => {
-      bail!("refresh token cannot be stored. maybe db failure.")
-    }
-  }
+  let _ = &globals
+    .user_db
+    .add_refresh_token(
+      info.get_subscriber_id(),
+      client_id,
+      refresh_token,
+      expires,
+      current,
+    )
+    .map_err(|_| anyhow!("refresh token cannot be stored. maybe db failure."))?;
+
+  Ok((
+    Status::new(200),
+    (
+      ContentType::JSON,
+      Json(TokenResponseBody::Access(TokenResponse {
+        token,
+        metadata,
+        message: "ok. login.".to_string(),
+      })),
+    ),
+  ))
 }

@@ -15,6 +15,7 @@ mod rocket_api_refresh;
 mod rocket_api_token_checkflow;
 mod rocket_api_tokens;
 mod utils;
+
 use error::*;
 use globals::{Globals, Mode};
 use health_check::health;

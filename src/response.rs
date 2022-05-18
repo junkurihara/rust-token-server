@@ -1,7 +1,8 @@
 use crate::jwt::{Token, TokenMetaData};
-use rocket::http::{ContentType, Status};
-use rocket::serde::json::Json;
-use rocket::serde::Serialize;
+use rocket::{
+  http::{ContentType, Status},
+  serde::{json::Json, Serialize},
+};
 
 // for token, refresh
 #[derive(Serialize, Debug, Clone)]

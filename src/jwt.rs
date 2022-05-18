@@ -1,17 +1,10 @@
-use crate::constants::*;
-use crate::db::UserInfo;
-use crate::error::*;
-use crate::globals::Globals;
+use crate::{constants::*, db::UserInfo, error::*, globals::Globals};
 use chrono::{DateTime, Local, TimeZone};
 use jwt_simple::prelude::*;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use rocket::serde::Serialize;
-use rocket::State;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rocket::{serde::Serialize, State};
 use serde_json::Value;
-use std::collections::HashSet;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
@@ -40,7 +33,7 @@ pub fn generate_jwt(
   client_id: &str,
   globals: &State<Arc<Globals>>,
   refresh_required: bool,
-) -> Result<(Token, TokenMetaData), Error> {
+) -> Result<(Token, TokenMetaData)> {
   let addition = AdditionalClaimData {
     is_admin: *user_info.clone().is_admin(),
   };
@@ -60,21 +53,20 @@ pub fn generate_jwt(
     iss,
     aud
   );
-  let refresh: Option<String> = match refresh_required {
-    true => {
-      let refresh_string = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(REFRESH_TOKEN_LEN)
-        .map(char::from)
-        .collect();
-      debug!(
-        "[{}] Created refresh token: {}",
-        user_info.get_username(),
-        refresh_string
-      );
-      Some(refresh_string)
-    }
-    _ => None,
+  let refresh: Option<String> = if refresh_required {
+    let refresh_string = thread_rng()
+      .sample_iter(&Alphanumeric)
+      .take(REFRESH_TOKEN_LEN)
+      .map(char::from)
+      .collect();
+    debug!(
+      "[{}] Created refresh token: {}",
+      user_info.get_username(),
+      refresh_string
+    );
+    Some(refresh_string)
+  } else {
+    None
   };
 
   return Ok((
@@ -103,7 +95,7 @@ pub enum Algorithm {
 }
 impl FromStr for Algorithm {
   type Err = Error;
-  fn from_str(s: &str) -> Result<Self, Error> {
+  fn from_str(s: &str) -> Result<Self> {
     match s {
       // "HS256" => Ok(Algorithm::HS256),
       // "HS384" => Ok(Algorithm::HS384),
@@ -143,11 +135,7 @@ pub enum JwtSigningKey {
 }
 
 impl JwtSigningKey {
-  pub fn new(
-    validation_algorithm: &Algorithm,
-    key_str: &str,
-    with_key_id: bool,
-  ) -> Result<Self, Error> {
+  pub fn new(validation_algorithm: &Algorithm, key_str: &str, with_key_id: bool) -> Result<Self> {
     let signing_key = match validation_algorithm {
       // Algorithm::HS256 => {
       //   let mut k = HS256Key::from_bytes(key_str.as_ref());
@@ -171,22 +159,18 @@ impl JwtSigningKey {
       //   JwtSigningKey::HS512(k)
       // }
       Algorithm::ES256 => {
-        let private_key: Result<p256::SecretKey, p256::pkcs8::Error> =
+        let private_key_res: Result<p256::SecretKey, p256::pkcs8::Error> =
           p256::pkcs8::DecodePrivateKey::from_pkcs8_pem(key_str);
-        if let Ok(unwrapped) = private_key {
-          let keypair = ES256KeyPair::from_bytes(&unwrapped.to_be_bytes())?;
-          if with_key_id {
-            let mut pk = keypair.public_key();
-            JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
-          } else {
-            JwtSigningKey::ES256(keypair)
-          }
+        let private_key =
+          private_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+        let keypair = ES256KeyPair::from_bytes(private_key.to_be_bytes().as_ref())?;
+        if with_key_id {
+          let mut pk = keypair.public_key();
+          JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
         } else {
-          bail!("Unsupported key format");
+          JwtSigningKey::ES256(keypair)
         }
-      } // _ => {
-        //   bail!("Unsupported Key Type");
-        // }
+      }
     };
     Ok(signing_key)
   }
@@ -194,7 +178,7 @@ impl JwtSigningKey {
   pub fn generate_token(
     &self,
     claims: JWTClaims<AdditionalClaimData>,
-  ) -> Result<(String, String, String, String, Vec<String>), Error> {
+  ) -> Result<(String, String, String, String, Vec<String>)> {
     let generated_jwt = match self {
       JwtSigningKey::ES256(pk) => pk.sign(claims),
       // JwtSigningKey::HS256(pk) => pk.authenticate(claims),
@@ -213,9 +197,10 @@ impl JwtSigningKey {
 
     let iat = (&json_value["iat"]).to_string().parse::<i64>()?;
     let exp = (&json_value["exp"]).to_string().parse::<i64>()?;
-    let iss = match (&json_value["iss"]).as_str() {
-      None => bail!("No issuer is specified in JWT"),
-      Some(i) => i.to_string(),
+    let iss = if let Some(i) = (&json_value["iss"]).as_str() {
+      i.to_string()
+    } else {
+      bail!("No issuer is specified in JWT");
     };
     let aud = if let Value::Array(aud_vec) = &json_value["aud"] {
       aud_vec
@@ -242,13 +227,12 @@ impl JwtSigningKey {
     &self,
     token: &str,
     globals: &Arc<Globals>,
-  ) -> Result<JWTClaims<AdditionalClaimData>, Error> {
+  ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = &globals.allowed_client_ids {
       options.allowed_audiences = Some(HashSet::from_strings(allowed));
     }
     options.allowed_issuers = Some(HashSet::from_strings(&[&globals.token_issuer]));
-    // debug!("options: {:?}", options);
     match self {
       JwtSigningKey::ES256(sk) => sk
         .public_key()

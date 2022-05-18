@@ -1,8 +1,10 @@
-use crate::constants::{ARGON2_CONFIG, ARGON2_SALT_LEN};
-use crate::error::*;
+use crate::{
+  constants::{ARGON2_CONFIG, ARGON2_SALT_LEN},
+  error::*,
+};
 use rand::prelude::*;
 
-pub fn generate_argon2(password: &str) -> Result<String, Error> {
+pub fn generate_argon2(password: &str) -> Result<String> {
   let mut salt = [0u8; ARGON2_SALT_LEN];
   rand::thread_rng().fill_bytes(&mut salt);
 
@@ -11,7 +13,7 @@ pub fn generate_argon2(password: &str) -> Result<String, Error> {
   Ok(hash)
 }
 
-pub fn verify_argon2(password: &str, encoded_hash: &str) -> Result<bool, Error> {
+pub fn verify_argon2(password: &str, encoded_hash: &str) -> Result<bool> {
   let matches = argon2::verify_encoded(encoded_hash, password.as_bytes())?;
 
   Ok(matches)

@@ -1,14 +1,14 @@
-use crate::constants::*;
-use crate::db::UserDB;
-use crate::error::*;
-use crate::globals::{Globals, Mode};
-use crate::jwt::{Algorithm, AlgorithmType, JwtSigningKey};
+use crate::{
+  constants::*,
+  db::UserDB,
+  error::*,
+  globals::{Globals, Mode},
+  jwt::{Algorithm, AlgorithmType, JwtSigningKey},
+};
 use clap::{command, Arg, Command};
-use std::fs;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{fs, str::FromStr, sync::Arc};
 
-pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>), Error> {
+pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
   use crate::utils::verify_url;
 
   let _ = include_str!("../Cargo.toml");

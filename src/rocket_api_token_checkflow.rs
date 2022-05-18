@@ -1,10 +1,11 @@
-use crate::db::{UserInfo, UserSearchKey};
-use crate::jwt::AdditionalClaimData;
-use crate::request_bearer_token::*;
-use crate::Globals;
+use crate::{
+  db::{UserInfo, UserSearchKey},
+  jwt::AdditionalClaimData,
+  request_bearer_token::*,
+  Globals,
+};
 use jwt_simple::prelude::*;
-use rocket::http::Status;
-use rocket::State;
+use rocket::{http::Status, State};
 use std::sync::Arc;
 
 pub fn check_token_and_db(

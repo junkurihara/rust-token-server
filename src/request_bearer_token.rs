@@ -1,19 +1,16 @@
 use crate::error::*;
-use rocket::http::Status;
-use rocket::outcome::Outcome;
-use rocket::request;
-use rocket::request::FromRequest;
-use rocket::serde::Deserialize;
-use rocket::Request;
+use rocket::{
+  http::Status, outcome::Outcome, request, request::FromRequest, serde::Deserialize, Request,
+};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct BearerToken(pub String);
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for BearerToken {
-  type Error = anyhow::Error;
+  type Error = Error;
 
-  async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+  async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Error> {
     let token = request.headers().get_one("Authorization");
     match token {
       Some(token) => {

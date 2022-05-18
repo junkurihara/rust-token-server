@@ -1,13 +1,16 @@
-use crate::db::UserInfo;
-use crate::db::UserSearchKey;
-use crate::error::*;
-use crate::jwt::generate_jwt;
-use crate::response::{token_response_error, TokenResponse, TokenResponseBody};
-use crate::Globals;
+use crate::{
+  db::{UserInfo, UserSearchKey},
+  error::*,
+  jwt::generate_jwt,
+  response::{token_response_error, TokenResponse, TokenResponseBody},
+  Globals,
+};
 use chrono::Local;
-use rocket::http::{ContentType, Status};
-use rocket::serde::{json::Json, Deserialize};
-use rocket::State;
+use rocket::{
+  http::{ContentType, Status},
+  serde::{json::Json, Deserialize},
+  State,
+};
 use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -59,9 +62,7 @@ pub fn refresh(
   };
 
   match access(&info, &client_id, globals) {
-    Ok(res) => {
-      res
-    }
+    Ok(res) => res,
     Err(e) => {
       error!("Failed to create token: {}", e);
       token_response_error(Status::Forbidden)
@@ -73,7 +74,7 @@ pub fn access(
   info: &UserInfo,
   client_id: &str,
   globals: &State<Arc<Globals>>,
-) -> Result<(Status, (ContentType, Json<TokenResponseBody>)), Error> {
+) -> Result<(Status, (ContentType, Json<TokenResponseBody>))> {
   let (token, metadata) = generate_jwt(info, client_id, globals, false)?;
   Ok((
     Status::new(200),

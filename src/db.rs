@@ -1,8 +1,7 @@
-use crate::auth::generate_argon2;
-use crate::error::*;
+use crate::{auth::generate_argon2, error::*};
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use log::{debug, info};
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -48,7 +47,7 @@ impl UserDB {
     admin_name: Option<&str>,
     admin_password: Option<&str>,
     allowed_client_ids: Vec<&str>,
-  ) -> Result<(), Error> {
+  ) -> Result<()> {
     // create table if not exist
     let conn = Connection::open(&self.db_file_path)?;
     // user table
@@ -112,7 +111,7 @@ impl UserDB {
     Ok(())
   }
 
-  fn _count_all_members(&self, conn: &Connection, table_name: &str) -> Result<usize, Error> {
+  fn _count_all_members(&self, conn: &Connection, table_name: &str) -> Result<usize> {
     let sql = &format!("select * from {}", table_name);
     let mut prep = conn.prepare(sql)?;
     let rows = prep.query(params![])?;
@@ -120,18 +119,14 @@ impl UserDB {
     Ok(cnt)
   }
 
-  pub fn get_user(&self, search_key: UserSearchKey) -> Result<Option<UserInfo>, Error> {
+  pub fn get_user(&self, search_key: UserSearchKey) -> Result<Option<UserInfo>> {
     let conn = Connection::open(&self.db_file_path)?;
     let user_info = self._get_user(&conn, search_key);
     conn.close().map_err(|(_, e)| anyhow!(e))?;
     user_info
   }
 
-  fn _get_user(
-    &self,
-    conn: &Connection,
-    search_key: UserSearchKey,
-  ) -> Result<Option<UserInfo>, Error> {
+  fn _get_user(&self, conn: &Connection, search_key: UserSearchKey) -> Result<Option<UserInfo>> {
     let sql = match search_key {
       UserSearchKey::SubscriberId(sub_id) => format!(
         "select * from {} where subscriber_id='{}'",
@@ -164,13 +159,11 @@ impl UserDB {
         let res = x?;
         Ok(Some(res))
       }
-      None => {
-        Ok(None)
-      }
+      None => Ok(None),
     }
   }
 
-  pub fn get_all_allowed_client_ids(&self) -> Result<Vec<String>, Error> {
+  pub fn get_all_allowed_client_ids(&self) -> Result<Vec<String>> {
     let conn = Connection::open(&self.db_file_path)?;
 
     let sql = &format!("select * from {}", self.allowed_client_table_name);
@@ -187,7 +180,7 @@ impl UserDB {
     Ok(nexts)
   }
 
-  fn _add_client_ids(&self, conn: &Connection, client_ids: &[&str]) -> Result<(), Error> {
+  fn _add_client_ids(&self, conn: &Connection, client_ids: &[&str]) -> Result<()> {
     let sql = &format!(
       "insert into {} (client_id) VALUES (?)",
       &self.allowed_client_table_name
@@ -198,7 +191,7 @@ impl UserDB {
     Ok(())
   }
 
-  pub fn add_user(&self, username: &str, password: &str, is_admin: bool) -> Result<(), Error> {
+  pub fn add_user(&self, username: &str, password: &str, is_admin: bool) -> Result<()> {
     let conn = Connection::open(&self.db_file_path)?;
     let res = self._add_user(&conn, username, password, is_admin);
     conn.close().map_err(|(_, e)| anyhow!(e))?;
@@ -211,7 +204,7 @@ impl UserDB {
     username: &str,
     password: &str,
     is_admin: bool,
-  ) -> Result<(), Error> {
+  ) -> Result<()> {
     let admin_int: usize = match is_admin {
       true => 1,
       false => 0,
@@ -242,7 +235,7 @@ impl UserDB {
     refresh_token: &str,
     expires: u64,
     current: u64,
-  ) -> Result<(), Error> {
+  ) -> Result<()> {
     let conn = Connection::open(&self.db_file_path)?;
 
     {
@@ -275,7 +268,7 @@ impl UserDB {
     client_id: &str,
     refresh_token: &str,
     current: u64,
-  ) -> Result<Option<String>, Error> {
+  ) -> Result<Option<String>> {
     let conn = Connection::open(&self.db_file_path)?;
 
     let subscriber_id = {
