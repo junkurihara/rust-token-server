@@ -19,7 +19,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("signing_key_path")
             .short('s')
             .long("signing-key-path")
-            .takes_value(true)
+            .value_name("PATH")
             .required(true)
             .help("Signing key file path"),
         )
@@ -27,7 +27,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("signing_algorithm")
             .short('a')
             .long("signing-algorithm")
-            .takes_value(true)
+            .value_name("PATH")
             .default_value("ES256")
             .help("Signing algorithm of JWT like \"ES256\""),
         )
@@ -35,7 +35,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("db_file_path")
             .short('d')
             .long("db-file-path")
-            .takes_value(true)
+            .value_name("PATH")
             .default_value(DB_FILE_PATH)
             .help("SQLite database file path"),
         )
@@ -43,12 +43,14 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("with_key_id")
             .short('i')
             .long("with-key-id")
+            .action(clap::ArgAction::SetTrue)
             .help("Include key id in JWT"),
         )
         .arg(
           Arg::new("ignore_client_id")
             .short('o')
             .long("ignore-client-id")
+            .action(clap::ArgAction::SetTrue)
             .help("Ignore checking client id in token request"),
         )
         .arg(
@@ -56,8 +58,8 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
             .short('t')
             .long("token-issuer")
             .required(true)
-            .validator(verify_url)
-            .takes_value(true)
+            .value_parser(verify_url)
+            .value_name("URL")
             .help("Issuer of Id token specified as URL like \"https://example.com/issue\""),
         ),
     )
@@ -67,7 +69,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("db_file_path")
             .short('d')
             .long("db-file-path")
-            .takes_value(true)
+            .value_name("PATH")
             .default_value(DB_FILE_PATH)
             .help("SQLite database file path"),
         )
@@ -76,14 +78,14 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
             .short('n')
             .long("admin-name")
             .required(true)
-            .takes_value(true)
+            .value_name("NAME")
             .help("SQLite database admin name"),
         )
         .arg(
           Arg::new("admin_password")
             .short('p')
             .long("admin-password")
-            .takes_value(true)
+            .value_name("PASSWORD")
             .required(true)
             .help("SQLite database admin password"),
         )
@@ -91,15 +93,16 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
           Arg::new("client_ids")
             .short('c')
             .long("client-ids")
-            .takes_value(true)
+            .value_name("IDs")
             .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\""),
         ),
     );
 
+  // println!("{:#?}", options);
   let matches = options.get_matches();
 
   if let Some(matches) = matches.subcommand_matches("run") {
-    let algorithm: Algorithm = match matches.value_of("signing_algorithm") {
+    let algorithm: Algorithm = match matches.get_one::<String>("signing_algorithm") {
       Some(a) => match Algorithm::from_str(a) {
         Ok(ao) => ao,
         Err(_) => {
@@ -111,8 +114,8 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
       }
     };
 
-    let with_key_id = matches.is_present("with_key_id");
-    let signing_key: JwtSigningKey = match matches.value_of("signing_key_path") {
+    let with_key_id = matches.get_flag("with_key_id");
+    let signing_key: JwtSigningKey = match matches.get_one::<String>("signing_key_path") {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
           match algorithm.get_type() {
@@ -132,7 +135,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
       }
     };
 
-    let db_file_path: String = match matches.value_of("db_file_path") {
+    let db_file_path: String = match matches.get_one::<String>("db_file_path") {
       Some(p) => p.to_string(),
       None => {
         bail!("Database path must be specified");
@@ -149,14 +152,14 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
     user_db.clone().init_db(None, None, vec![])?; // check db if it is already initialized.
 
     // read client ids
-    let ignore_client_id = matches.is_present("ignore_client_id");
+    let ignore_client_id = matches.get_flag("ignore_client_id");
     let client_ids = user_db.get_all_allowed_client_ids()?;
     if !ignore_client_id {
       info!("allowed_client_ids {:?}", client_ids);
     }
 
     // get issuer
-    let token_issuer = match matches.value_of("token_issuer") {
+    let token_issuer = match matches.get_one::<String>("token_issuer") {
       Some(t) => t,
       None => {
         bail!("Issuer must be specified");
@@ -176,7 +179,7 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
 
     Ok((Mode::Run, Some(globals)))
   } else if let Some(matches) = matches.subcommand_matches("init") {
-    let db_file_path: String = match matches.value_of("db_file_path") {
+    let db_file_path: String = match matches.get_one::<String>("db_file_path") {
       Some(p) => p.to_string(),
       None => {
         bail!("Database path must be specified");
@@ -191,17 +194,21 @@ pub fn parse_opts() -> Result<(Mode, Option<Arc<Globals>>)> {
       token_table_name: TOKEN_TABLE_NAME.to_string(),
     };
 
-    let admin_name = matches.value_of("admin_name");
-    let admin_password = matches.value_of("admin_password");
+    let admin_name = matches.get_one::<String>("admin_name");
+    let admin_password = matches.get_one::<String>("admin_password");
 
-    let client_ids = matches.value_of("client_ids");
+    let client_ids = matches.get_one::<String>("client_ids");
     match client_ids {
       Some(cids) => user_db.init_db(
-        admin_name,
-        admin_password,
+        admin_name.as_ref().map(AsRef::as_ref),
+        admin_password.as_ref().map(AsRef::as_ref),
         cids.split(',').collect::<Vec<&str>>(),
       )?,
-      None => user_db.init_db(admin_name, admin_password, vec![])?,
+      None => user_db.init_db(
+        admin_name.as_ref().map(AsRef::as_ref),
+        admin_password.as_ref().map(AsRef::as_ref),
+        vec![],
+      )?,
     }
 
     Ok((Mode::Init, None))
