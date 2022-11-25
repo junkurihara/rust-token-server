@@ -19,7 +19,7 @@ rusqlite = "0.28.0"
 anyhow = "1.0.66"
 rust-argon2 = "1.0.0"
 rand = "0.8.5"
-env_logger = "0.9.1"
+env_logger = "0.10.0"
 log = "0.4.17"
 clap = { version = "4.0.18", default-features = false, features = [
   "std",
