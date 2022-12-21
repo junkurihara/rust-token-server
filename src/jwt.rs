@@ -161,8 +161,7 @@ impl JwtSigningKey {
       Algorithm::ES256 => {
         let private_key_res: Result<p256::SecretKey, p256::pkcs8::Error> =
           p256::pkcs8::DecodePrivateKey::from_pkcs8_pem(key_str);
-        let private_key =
-          private_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+        let private_key = private_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
         let keypair = ES256KeyPair::from_bytes(private_key.to_be_bytes().as_ref())?;
         if with_key_id {
           let mut pk = keypair.public_key();
@@ -189,15 +188,15 @@ impl JwtSigningKey {
       // }
     }?;
     // get token info
-    let parsed: Vec<&str> = (&generated_jwt).split('.').collect();
+    let parsed: Vec<&str> = generated_jwt.split('.').collect();
     let decoded_claims = base64::decode(parsed[1])?;
     // debug!("{:?}", String::from_utf8(base64::decode(parsed[0])?)?);
     let json_string = String::from_utf8(decoded_claims)?;
     let json_value: Value = serde_json::from_str(&json_string).map_err(|e| anyhow!("{}", e))?;
 
-    let iat = (&json_value["iat"]).to_string().parse::<i64>()?;
-    let exp = (&json_value["exp"]).to_string().parse::<i64>()?;
-    let iss = if let Some(i) = (&json_value["iss"]).as_str() {
+    let iat = json_value["iat"].to_string().parse::<i64>()?;
+    let exp = json_value["exp"].to_string().parse::<i64>()?;
+    let iss = if let Some(i) = json_value["iss"].as_str() {
       i.to_string()
     } else {
       bail!("No issuer is specified in JWT");
@@ -212,22 +211,12 @@ impl JwtSigningKey {
       vec![]
     };
 
-    let issued_at: DateTime<Local> = Local.timestamp(iat, 0);
-    let expires: DateTime<Local> = Local.timestamp(exp, 0);
-    Ok((
-      generated_jwt,
-      issued_at.to_string(),
-      expires.to_string(),
-      iss,
-      aud,
-    ))
+    let issued_at: DateTime<Local> = Local.timestamp_opt(iat, 0).unwrap();
+    let expires: DateTime<Local> = Local.timestamp_opt(exp, 0).unwrap();
+    Ok((generated_jwt, issued_at.to_string(), expires.to_string(), iss, aud))
   }
 
-  pub fn verify_token(
-    &self,
-    token: &str,
-    globals: &Arc<Globals>,
-  ) -> Result<JWTClaims<AdditionalClaimData>> {
+  pub fn verify_token(&self, token: &str, globals: &Arc<Globals>) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = &globals.allowed_client_ids {
       options.allowed_audiences = Some(HashSet::from_strings(allowed));
