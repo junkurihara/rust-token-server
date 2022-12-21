@@ -189,7 +189,13 @@ impl JwtSigningKey {
     }?;
     // get token info
     let parsed: Vec<&str> = generated_jwt.split('.').collect();
-    let decoded_claims = base64::decode(parsed[1])?;
+    let decoded_claims = base64::decode_engine(
+      parsed[1],
+      &base64::engine::fast_portable::FastPortable::from(
+        &base64::alphabet::URL_SAFE,
+        base64::engine::fast_portable::NO_PAD,
+      ),
+    )?;
     // debug!("{:?}", String::from_utf8(base64::decode(parsed[0])?)?);
     let json_string = String::from_utf8(decoded_claims)?;
     let json_value: Value = serde_json::from_str(&json_string).map_err(|e| anyhow!("{}", e))?;
