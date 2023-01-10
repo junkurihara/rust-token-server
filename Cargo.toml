@@ -14,21 +14,21 @@ publish = false
 
 [dependencies]
 rocket = { version = "0.5.0-rc.2", features = ["json"] }
-serde = "1.0.151"
+serde = "1.0.152"
 rusqlite = "0.28.0"
 anyhow = "1.0.68"
 rust-argon2 = "1.0.0"
 rand = "0.8.5"
 env_logger = "0.10.0"
 log = "0.4.17"
-clap = { version = "4.0.30", default-features = false, features = [
+clap = { version = "4.0.32", default-features = false, features = [
   "std",
   "cargo",
   "wrap_help",
 ] }
 p256 = { version = "0.11.1", features = ["pem", "jwk", "default"] }
 jwt-simple = "0.11.2"
-base64 = "0.20.0"
+base64 = "0.21.0"
 serde_json = "1.0.91"
 chrono = "0.4.23"
 url = "2.3.1"

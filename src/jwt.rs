@@ -1,4 +1,5 @@
 use crate::{constants::*, db::UserInfo, error::*, globals::Globals};
+use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
 use jwt_simple::prelude::*;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -189,13 +190,9 @@ impl JwtSigningKey {
     }?;
     // get token info
     let parsed: Vec<&str> = generated_jwt.split('.').collect();
-    let decoded_claims = base64::decode_engine(
-      parsed[1],
-      &base64::engine::fast_portable::FastPortable::from(
-        &base64::alphabet::URL_SAFE,
-        base64::engine::fast_portable::NO_PAD,
-      ),
-    )?;
+    let decoded_claims =
+      base64::engine::GeneralPurpose::new(&base64::alphabet::URL_SAFE, base64::engine::general_purpose::NO_PAD)
+        .decode(parsed[1])?;
     // debug!("{:?}", String::from_utf8(base64::decode(parsed[0])?)?);
     let json_string = String::from_utf8(decoded_claims)?;
     let json_value: Value = serde_json::from_str(&json_string).map_err(|e| anyhow!("{}", e))?;
