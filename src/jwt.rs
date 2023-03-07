@@ -163,7 +163,7 @@ impl JwtSigningKey {
         let private_key_res: Result<p256::SecretKey, p256::pkcs8::Error> =
           p256::pkcs8::DecodePrivateKey::from_pkcs8_pem(key_str);
         let private_key = private_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
-        let keypair = ES256KeyPair::from_bytes(private_key.to_be_bytes().as_ref())?;
+        let keypair = ES256KeyPair::from_bytes(private_key.to_bytes().as_ref())?;
         if with_key_id {
           let mut pk = keypair.public_key();
           JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
