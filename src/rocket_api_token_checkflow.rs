@@ -14,13 +14,17 @@ pub fn check_token_and_db(
   admin_required: bool,
 ) -> Result<(UserInfo, JWTClaims<AdditionalClaimData>), Status> {
   // Verify bearer token with aud and iss checks
-  let claims = match globals.signing_key.verify_token(&bearer_token.0, globals) {
-    Ok(c) => c,
-    Err(e) => {
-      error!("Unauthorized access, failed to verify JWT: {}", e);
-      return Err(Status::Unauthorized);
-    }
-  };
+  let claims =
+    match globals
+      .signing_key
+      .verify_token(&bearer_token.0, &globals.token_issuer, &globals.allowed_client_ids)
+    {
+      Ok(c) => c,
+      Err(e) => {
+        error!("Unauthorized access, failed to verify JWT: {}", e);
+        return Err(Status::Unauthorized);
+      }
+    };
   if admin_required && !claims.custom.is_admin {
     error!("Non administrator flag in token");
     return Err(Status::Unauthorized);

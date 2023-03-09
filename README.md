@@ -22,7 +22,7 @@ Before running the server, EC (P256) key pair must be prepared as:
 
 ```
 # generate a keypair (actually this is a private key)
-$ openssl ecparam -genkey -name prime256v1 -noout -out keyapir.pem
+$ openssl ecparam -genkey -name prime256v1 -noout -out keypair.pem
 
 # extract its private key in PKCS8 format
 $ openssl pkcs8 -in keypair.pem -out private_key.pem -topk8 -nocrypt
@@ -122,7 +122,7 @@ ID tokens can be refreshed by sending refresh token.
 http://<your_domain>:<your_port>/v1.0/refresh
 ```
 
-e.g., 
+e.g.,
 
 ```
 curl -i -X POST \

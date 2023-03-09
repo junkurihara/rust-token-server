@@ -30,21 +30,18 @@ pub fn refresh(
   // search user_db refresh token table with client_id and refresh_token, and check its existence and expiration
   let user_db = globals.user_db.clone();
   let current: u64 = Local::now().timestamp() as u64;
-  let associated_subscriber_id =
-    match user_db.get_subid_for_refresh_token(&client_id, &refresh_token, current) {
-      Ok(v) => match v {
-        Some(subscriber_id) => subscriber_id,
-        None => {
-          return token_response_error(Status::Unauthorized);
-        }
-      },
-      Err(_) => return token_response_error(Status::ServiceUnavailable),
-    };
+  let associated_subscriber_id = match user_db.get_subid_for_refresh_token(&client_id, &refresh_token, current) {
+    Ok(v) => match v {
+      Some(subscriber_id) => subscriber_id,
+      None => {
+        return token_response_error(Status::Unauthorized);
+      }
+    },
+    Err(_) => return token_response_error(Status::ServiceUnavailable),
+  };
 
   // find user info from subscriber id from refresh token table
-  let info: UserInfo = match user_db
-    .get_user(UserSearchKey::SubscriberId(&associated_subscriber_id))
-  {
+  let info: UserInfo = match user_db.get_user(UserSearchKey::SubscriberId(&associated_subscriber_id)) {
     Err(e) => {
       error!("Failed to get user info: {}", e);
       return token_response_error(Status::ServiceUnavailable);
@@ -75,7 +72,7 @@ pub fn access(
   client_id: &str,
   globals: &State<Arc<Globals>>,
 ) -> Result<(Status, (ContentType, Json<TokenResponseBody>))> {
-  let (token, metadata) = generate_jwt(info, client_id, globals, false)?;
+  let (token, metadata) = generate_jwt(info, client_id, &globals.token_issuer, &globals.signing_key, false)?;
   Ok((
     Status::new(200),
     (
