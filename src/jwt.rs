@@ -1,7 +1,6 @@
 use crate::{constants::*, db::UserInfo, error::*};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
-use ed25519_dalek::pkcs8::DecodePrivateKey;
 use jwt_simple::prelude::*;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use rocket::serde::Serialize;
@@ -179,6 +178,7 @@ impl JwtSigningKey {
         }
       }
       Algorithm::EdDSA => {
+        use ed25519_dalek::pkcs8::DecodePrivateKey;
         let signing_key_res = ed25519_dalek::SigningKey::from_pkcs8_pem(key_str);
         let signing_key = signing_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
         let keypair_bytes = signing_key.to_keypair_bytes();
