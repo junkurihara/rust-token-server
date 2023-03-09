@@ -6,11 +6,12 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct UserInfo {
-  id: usize,
-  username: String,
-  subscriber_id: String,
-  encoded_hash: String, // including salt and argon2 config
-  is_admin: bool,
+  #[allow(dead_code)]
+  pub id: usize,
+  pub username: String,
+  pub subscriber_id: String,
+  pub encoded_hash: String, // including salt and argon2 config
+  pub is_admin: bool,
 }
 
 impl UserInfo {
@@ -132,10 +133,9 @@ impl UserDB {
         "select * from {} where subscriber_id='{}'",
         self.user_table_name, sub_id
       ),
-      UserSearchKey::Username(username) => format!(
-        "select * from {} where username='{}'",
-        self.user_table_name, username
-      ),
+      UserSearchKey::Username(username) => {
+        format!("select * from {} where username='{}'", self.user_table_name, username)
+      }
     };
     let mut prep = conn.prepare(&sql)?;
     let mut rows = prep.query_map(params![], |row| {
@@ -181,10 +181,7 @@ impl UserDB {
   }
 
   fn _add_client_ids(&self, conn: &Connection, client_ids: &[&str]) -> Result<()> {
-    let sql = &format!(
-      "insert into {} (client_id) VALUES (?)",
-      &self.allowed_client_table_name
-    );
+    let sql = &format!("insert into {} (client_id) VALUES (?)", &self.allowed_client_table_name);
     for cid in client_ids {
       conn.execute(sql, params![*cid])?;
     }
@@ -198,13 +195,7 @@ impl UserDB {
     res
   }
 
-  fn _add_user(
-    &self,
-    conn: &Connection,
-    username: &str,
-    password: &str,
-    is_admin: bool,
-  ) -> Result<()> {
+  fn _add_user(&self, conn: &Connection, username: &str, password: &str, is_admin: bool) -> Result<()> {
     let admin_int: usize = match is_admin {
       true => 1,
       false => 0,
@@ -216,14 +207,8 @@ impl UserDB {
     let encoded_hash: &str = &generate_argon2(password)?;
     let subscriber_id: String = Uuid::new_v4().to_string();
 
-    debug!(
-      "subscriber_id is created for {}: {}",
-      username, subscriber_id
-    );
-    conn.execute(
-      sql,
-      params![username, &subscriber_id, encoded_hash, admin_int],
-    )?;
+    debug!("subscriber_id is created for {}: {}", username, subscriber_id);
+    conn.execute(sql, params![username, &subscriber_id, encoded_hash, admin_int])?;
 
     Ok(())
   }
@@ -245,17 +230,11 @@ impl UserDB {
         &self.token_table_name
       );
 
-      conn.execute(
-        sql,
-        params![subscriber_id, client_id, refresh_token, expires as u64],
-      )?;
+      conn.execute(sql, params![subscriber_id, client_id, refresh_token, { expires }])?;
     }
     {
       // prune expired tokens
-      let sql = &format!(
-        "delete from {} where expires < {}",
-        &self.token_table_name, current
-      );
+      let sql = &format!("delete from {} where expires < {}", &self.token_table_name, current);
       conn.execute(sql, params![])?;
     }
     conn.close().map_err(|(_, e)| anyhow!(e))?;
@@ -298,10 +277,7 @@ impl UserDB {
     };
     {
       // prune expired tokens
-      let sql = &format!(
-        "delete from {} where expires < {}",
-        &self.token_table_name, current
-      );
+      let sql = &format!("delete from {} where expires < {}", &self.token_table_name, current);
       conn.execute(sql, params![])?;
     }
     conn.close().map_err(|(_, e)| anyhow!(e))?;

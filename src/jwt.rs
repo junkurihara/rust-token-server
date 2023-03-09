@@ -1,12 +1,12 @@
-use crate::{constants::*, db::UserInfo, error::*, globals::Globals};
+use crate::{constants::*, db::UserInfo, error::*};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
 use ed25519_dalek::pkcs8::DecodePrivateKey;
 use jwt_simple::prelude::*;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use rocket::{serde::Serialize, State};
+use rocket::serde::Serialize;
 use serde_json::Value;
-use std::{collections::HashSet, str::FromStr, sync::Arc};
+use std::{collections::HashSet, str::FromStr};
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
@@ -33,7 +33,8 @@ pub struct AdditionalClaimData {
 pub fn generate_jwt(
   user_info: &UserInfo,
   client_id: &str,
-  globals: &State<Arc<Globals>>,
+  token_issuer: &str,
+  signing_key: &JwtSigningKey,
   refresh_required: bool,
 ) -> Result<(Token, TokenMetaData)> {
   let addition = AdditionalClaimData {
@@ -43,9 +44,9 @@ pub fn generate_jwt(
   audiences.insert(client_id);
   let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
     .with_subject(user_info.get_subscriber_id())
-    .with_issuer(&globals.token_issuer)
+    .with_issuer(token_issuer)
     .with_audiences(audiences);
-  let (generated_jwt, iat, exp, iss, aud) = &globals.signing_key.generate_token(claims)?;
+  let (generated_jwt, iat, exp, iss, aud) = signing_key.generate_token(claims)?;
   info!(
     "[{}] Issued a JWT for sub: {} with iat: {}, exp: {}, iss: {}, aud: {:?}",
     user_info.get_username(),
@@ -73,12 +74,12 @@ pub fn generate_jwt(
 
   return Ok((
     Token {
-      id: generated_jwt.to_string(),
+      id: generated_jwt,
       refresh,
-      issuer: iss.to_string(),
+      issuer: iss,
       allowed_apps: aud.to_vec(),
-      issued_at: iat.to_string(),
-      expires: exp.to_string(),
+      issued_at: iat,
+      expires: exp,
       subscriber_id: user_info.get_subscriber_id().to_string(),
     },
     TokenMetaData {
@@ -127,6 +128,7 @@ impl Algorithm {
     match self {
       Algorithm::ES256 => AlgorithmType::Ecc,
       Algorithm::EdDSA => AlgorithmType::Ecc,
+      #[allow(unreachable_patterns)]
       _ => AlgorithmType::Hmac,
     }
   }
@@ -237,12 +239,17 @@ impl JwtSigningKey {
     Ok((generated_jwt, issued_at.to_string(), expires.to_string(), iss, aud))
   }
 
-  pub fn verify_token(&self, token: &str, globals: &Arc<Globals>) -> Result<JWTClaims<AdditionalClaimData>> {
+  pub fn verify_token(
+    &self,
+    token: &str,
+    token_issuer: &str,
+    allowed_client_ids: &Option<Vec<String>>,
+  ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
-    if let Some(allowed) = &globals.allowed_client_ids {
+    if let Some(allowed) = allowed_client_ids {
       options.allowed_audiences = Some(HashSet::from_strings(allowed));
     }
-    options.allowed_issuers = Some(HashSet::from_strings(&[&globals.token_issuer]));
+    options.allowed_issuers = Some(HashSet::from_strings(&[token_issuer]));
     match self {
       JwtSigningKey::ES256(sk) => sk
         .public_key()
@@ -256,6 +263,38 @@ impl JwtSigningKey {
       // _ => {
       //   bail!("Unsupported key");
       // }
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  const P256_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgv7zxW56ojrWwmSo1\n4uOdbVhUfj9Jd+5aZIB9u8gtWnihRANCAARGYsMe0CT6pIypwRvoJlLNs4+cTh2K\nL7fUNb5i6WbKxkpAoO+6T3pMBG5Yw7+8NuGTvvtrZAXduA2giPxQ8zCf\n-----END PRIVATE KEY-----";
+  const EDDSA_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDSHAE++q1BP7T8tk+mJtS+hLf81B0o6CFyWgucDFN/C\n-----END PRIVATE KEY-----";
+  #[test]
+  fn test_generate_and_verify() {
+    let user_info = UserInfo {
+      id: 0,
+      username: "test_user".to_string(),
+      subscriber_id: "test_subid".to_string(),
+      encoded_hash: "test_hash".to_string(),
+      is_admin: true,
+    };
+    let client_id = "client_id";
+    let token_issuer = "issuer";
+    let refresh_required = true;
+
+    let keys = [P256_PRIVATE_KEY, EDDSA_PRIVATE_KEY];
+    let algs = [Algorithm::ES256, Algorithm::EdDSA];
+    for (alg, key_str) in algs.iter().zip(keys.iter()) {
+      let signing_key = JwtSigningKey::new(alg, key_str, false).unwrap();
+      let token = generate_jwt(&user_info, client_id, token_issuer, &signing_key, refresh_required);
+      assert!(token.is_ok());
+
+      let id_token = token.unwrap().0.id;
+      let validation_result = signing_key.verify_token(&id_token, token_issuer, &None);
+      assert!(validation_result.is_ok());
     }
   }
 }

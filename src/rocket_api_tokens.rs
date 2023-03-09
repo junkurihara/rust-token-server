@@ -85,7 +85,7 @@ pub fn access(
   client_id: &str,
   globals: &State<Arc<Globals>>,
 ) -> Result<(Status, (ContentType, Json<TokenResponseBody>)), Error> {
-  let (token, metadata) = generate_jwt(info, client_id, globals, true)?;
+  let (token, metadata) = generate_jwt(info, client_id, &globals.token_issuer, &globals.signing_key, true)?;
   // generate refresh token? refresh token must be added to userdb if used
   // Add database refresh token
   let refresh_token = match &token.refresh {
@@ -96,13 +96,7 @@ pub fn access(
   let expires: u64 = current + ((REFRESH_TOKEN_DURATION_MINS as i64) * 60) as u64;
   let _ = &globals
     .user_db
-    .add_refresh_token(
-      info.get_subscriber_id(),
-      client_id,
-      refresh_token,
-      expires,
-      current,
-    )
+    .add_refresh_token(info.get_subscriber_id(), client_id, refresh_token, expires, current)
     .map_err(|_| anyhow!("refresh token cannot be stored. maybe db failure."))?;
 
   Ok((
