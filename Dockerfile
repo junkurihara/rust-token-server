@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -qy --no-install-recommends $BUILD_DEPS &&
     curl -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain stable && \
     export PATH="$HOME/.cargo/bin:$PATH" && \
     echo "Building token server from source" && \
-    cargo build --release --no-default-features && \
+    cargo build --release && \
     mkdir -p /opt/token-server/sbin && \
     mv target/release/rust-token-server /opt/token-server/sbin/ && \
     strip --strip-all /opt/token-server/sbin/rust-token-server && \
