@@ -1,6 +1,7 @@
 use crate::{constants::*, db::UserInfo, error::*, globals::Globals};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
+use ed25519_dalek::pkcs8::DecodePrivateKey;
 use jwt_simple::prelude::*;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use rocket::{serde::Serialize, State};
@@ -89,6 +90,7 @@ pub fn generate_jwt(
 
 #[derive(Debug, Clone)]
 pub enum Algorithm {
+  EdDSA,
   ES256,
   // HS256,
   // HS384,
@@ -109,6 +111,7 @@ impl FromStr for Algorithm {
       // "PS384" => Ok(Algorithm::PS384),
       // "PS512" => Ok(Algorithm::PS512),
       // "RS512" => Ok(Algorithm::RS512),
+      "EdDSA" => Ok(Algorithm::EdDSA),
       _ => bail!("Invalid Algorithm Name"),
     }
   }
@@ -123,12 +126,14 @@ impl Algorithm {
   pub fn get_type(&self) -> AlgorithmType {
     match self {
       Algorithm::ES256 => AlgorithmType::Ecc,
+      Algorithm::EdDSA => AlgorithmType::Ecc,
       _ => AlgorithmType::Hmac,
     }
   }
 }
 
 pub enum JwtSigningKey {
+  EdDSA(Ed25519KeyPair),
   ES256(ES256KeyPair),
   // HS256(HS256Key),
   // HS384(HS384Key),
@@ -171,6 +176,18 @@ impl JwtSigningKey {
           JwtSigningKey::ES256(keypair)
         }
       }
+      Algorithm::EdDSA => {
+        let signing_key_res = ed25519_dalek::SigningKey::from_pkcs8_pem(key_str);
+        let signing_key = signing_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+        let keypair_bytes = signing_key.to_keypair_bytes();
+        let keypair = jwt_simple::algorithms::Ed25519KeyPair::from_bytes(keypair_bytes.as_ref())?;
+        if with_key_id {
+          let mut pk = keypair.public_key();
+          JwtSigningKey::EdDSA(keypair.with_key_id(pk.create_key_id()))
+        } else {
+          JwtSigningKey::EdDSA(keypair)
+        }
+      }
     };
     Ok(signing_key)
   }
@@ -180,6 +197,7 @@ impl JwtSigningKey {
     claims: JWTClaims<AdditionalClaimData>,
   ) -> Result<(String, String, String, String, Vec<String>)> {
     let generated_jwt = match self {
+      JwtSigningKey::EdDSA(pk) => pk.sign(claims),
       JwtSigningKey::ES256(pk) => pk.sign(claims),
       // JwtSigningKey::HS256(pk) => pk.authenticate(claims),
       // JwtSigningKey::HS384(pk) => pk.authenticate(claims),
@@ -227,6 +245,9 @@ impl JwtSigningKey {
     options.allowed_issuers = Some(HashSet::from_strings(&[&globals.token_issuer]));
     match self {
       JwtSigningKey::ES256(sk) => sk
+        .public_key()
+        .verify_token::<AdditionalClaimData>(token, Some(options)),
+      JwtSigningKey::EdDSA(sk) => sk
         .public_key()
         .verify_token::<AdditionalClaimData>(token, Some(options)),
       // JwtSigningKey::HS256(k) => k.verify_token::<AdditionalClaimData>(token, Some(options)),
