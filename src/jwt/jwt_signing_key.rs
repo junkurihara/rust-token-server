@@ -8,31 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 
-// #[derive(Debug, Clone)]
-// pub struct UserInfo {
-//   #[allow(dead_code)]
-//   pub id: usize,
-//   pub username: String,
-//   pub subscriber_id: String,
-//   pub encoded_hash: String, // including salt and argon2 config
-//   pub is_admin: bool,
-// }
-
-// impl UserInfo {
-//   pub fn get_encoded_hash(&self) -> &str {
-//     &self.encoded_hash
-//   }
-//   pub fn is_admin(&self) -> &bool {
-//     &self.is_admin
-//   }
-//   pub fn get_username(&self) -> &str {
-//     &self.username
-//   }
-//   pub fn get_subscriber_id(&self) -> &str {
-//     &self.subscriber_id
-//   }
-// }
-
 #[derive(Serialize, Debug, Clone)]
 pub struct Token {
   pub id: String, // jwt itself is given here
@@ -249,8 +224,10 @@ mod tests {
   use super::*;
   const P256_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgv7zxW56ojrWwmSo1\n4uOdbVhUfj9Jd+5aZIB9u8gtWnihRANCAARGYsMe0CT6pIypwRvoJlLNs4+cTh2K\nL7fUNb5i6WbKxkpAoO+6T3pMBG5Yw7+8NuGTvvtrZAXduA2giPxQ8zCf\n-----END PRIVATE KEY-----";
   const EDDSA_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDSHAE++q1BP7T8tk+mJtS+hLf81B0o6CFyWgucDFN/C\n-----END PRIVATE KEY-----";
+
   #[test]
   fn test_generate_and_verify() {
+    init_logger();
     let user = User::new(&Username::new("test_user").unwrap(), None);
     assert!(user.is_ok());
     let user = user.unwrap();

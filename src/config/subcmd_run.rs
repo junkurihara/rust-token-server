@@ -1,6 +1,6 @@
 use super::ClapSubCommand;
 use crate::{
-  constants::DB_FILE_PATH,
+  constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
   db::setup_sqlite,
   error::*,
   jwt::{Algorithm, AlgorithmType, JwtSigningKey},
@@ -8,7 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use clap::{Arg, ArgMatches, Command};
-use std::{fs, str::FromStr};
+use std::{fs, net::SocketAddr, str::FromStr};
 
 pub(super) struct Run {}
 
@@ -16,6 +16,22 @@ pub(super) struct Run {}
 impl ClapSubCommand for Run {
   fn subcmd() -> Command {
     Command::new("run")
+      .arg(
+        Arg::new("listen_address")
+          .short('l')
+          .long("listen-address")
+          .value_name("ADDRESS")
+          .default_value(DEFAULT_ADDRESS)
+          .help("Listen address"),
+      )
+      .arg(
+        Arg::new("port")
+          .short('p')
+          .long("port")
+          .value_name("PORT")
+          .default_value(DEFAULT_PORT)
+          .help("Listen port"),
+      )
       .arg(
         Arg::new("signing_key_path")
           .short('s')
@@ -28,8 +44,8 @@ impl ClapSubCommand for Run {
         Arg::new("signing_algorithm")
           .short('a')
           .long("signing-algorithm")
-          .value_name("PATH")
-          .default_value("ES256")
+          .value_name("ALGORITHM")
+          .default_value(DEFAULT_ALGORITHM)
           .help("Signing algorithm of JWT like \"ES256\""),
       )
       .arg(
@@ -50,6 +66,14 @@ impl ClapSubCommand for Run {
   }
 
   async fn exec_matches(sub_m: &ArgMatches) -> Result<Option<crate::AppState>> {
+    let Some(address) = sub_m.get_one::<String>("listen_address") else {
+      bail!("Listen address must be specified");
+    };
+    let Some(port) = sub_m.get_one::<String>("port") else {
+      bail!("Port must be specified");
+    };
+    let listen_socket = format!("{}:{}", address, port).parse::<SocketAddr>()?;
+
     let algorithm: Algorithm = match sub_m.get_one::<String>("signing_algorithm") {
       Some(a) => match Algorithm::from_str(a) {
         Ok(ao) => ao,
@@ -94,6 +118,7 @@ impl ClapSubCommand for Run {
     let user_table = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
 
     Ok(Some(AppState {
+      listen_socket,
       crypto: CryptoState { algorithm, signing_key },
       user_table,
     }))

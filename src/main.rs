@@ -18,7 +18,7 @@ use crate::{
 };
 use axum::{routing::get, Router, Server};
 use config::parse_opts;
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 use tokio::runtime::Builder;
 
 fn main() -> Result<()> {
@@ -48,6 +48,9 @@ fn main() -> Result<()> {
 }
 
 async fn define_route(shared_state: Arc<AppState>) {
+  let addr = shared_state.listen_socket;
+  info!("Listening on {}", &addr);
+
   // routes nested under /v1.0
   let api_routes = Router::new().route("/jwks", get(jwks)).with_state(shared_state);
 
@@ -55,10 +58,7 @@ async fn define_route(shared_state: Arc<AppState>) {
     .route("/", get(root))
     .route("/health", get(health_check))
     .nest("/v1.0", api_routes);
-
   //.route("/create_user", post(create_user));
-  let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-  info!("Listening on {}", &addr);
 
   let server = Server::bind(&addr).serve(router.into_make_service());
 

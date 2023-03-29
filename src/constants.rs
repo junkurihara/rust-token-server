@@ -1,5 +1,8 @@
 pub const THREAD_NAME: &str = "id_token_server";
 
+pub const DEFAULT_ADDRESS: &str = "127.0.0.1";
+pub const DEFAULT_PORT: &str = "3000";
+
 // Default admin name that will be written to the database.
 pub const ADMIN_USERNAME: &str = "admin";
 // Default password length when random password is needed at the user creation.
@@ -27,6 +30,7 @@ pub const ARGON2_CONFIG: Config = Config {
 pub const ARGON2_SALT_LEN: usize = 32;
 
 // ID Token settings
+pub const DEFAULT_ALGORITHM: &str = "ES256";
 pub const JWT_DURATION_MINS: usize = 30; // TODO: Clapで設定できるように
 pub const REFRESH_TOKEN_LEN: usize = 256;
 pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60; // TODO: 30days, clapで設定できるように
