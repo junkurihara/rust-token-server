@@ -5,17 +5,11 @@ use std::str::FromStr;
 pub enum Algorithm {
   EdDSA,
   ES256,
-  // HS256,
-  // HS384,
-  // HS512,
 }
 impl FromStr for Algorithm {
   type Err = Error;
   fn from_str(s: &str) -> Result<Self> {
     match s {
-      // "HS256" => Ok(Algorithm::HS256),
-      // "HS384" => Ok(Algorithm::HS384),
-      // "HS512" => Ok(Algorithm::HS512),
       "ES256" => Ok(Algorithm::ES256),
       // "ES384" => Ok(Algorithm::ES384),
       // "RS256" => Ok(Algorithm::RS256),
@@ -31,17 +25,15 @@ impl FromStr for Algorithm {
 }
 #[derive(Debug, Clone)]
 pub enum AlgorithmType {
-  Ecc,
-  Hmac,
+  Ec,
+  Okp,
   // RSA,
 }
 impl Algorithm {
   pub fn get_type(&self) -> AlgorithmType {
     match self {
-      Algorithm::ES256 => AlgorithmType::Ecc,
-      Algorithm::EdDSA => AlgorithmType::Ecc,
-      #[allow(unreachable_patterns)]
-      _ => AlgorithmType::Hmac,
+      Algorithm::ES256 => AlgorithmType::Ec,
+      Algorithm::EdDSA => AlgorithmType::Okp,
     }
   }
 }

@@ -91,12 +91,8 @@ impl ClapSubCommand for Run {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
           match algorithm.get_type() {
-            AlgorithmType::Hmac => {
-              let truncate_vec: Vec<&str> = content.split('\n').collect();
-              ensure!(!truncate_vec.is_empty(), "Invalid (maybe null) signing key");
-              JwtSigningKey::new(&algorithm, truncate_vec[0], with_key_id)?
-            }
-            _ => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
+            AlgorithmType::Ec | AlgorithmType::Okp => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
+            _ => bail!("Unsupported"),
           }
         } else {
           bail!("Failed to read private key");

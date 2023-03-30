@@ -1,5 +1,6 @@
 mod alg;
 mod jwt_signing_key;
+// mod keypair;
 mod token_with_meta;
 
 pub use alg::{Algorithm, AlgorithmType};
