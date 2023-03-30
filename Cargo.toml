@@ -35,17 +35,7 @@ async-trait = "0.1.68"
 uuid = { version = "1.3.0", features = ["v4"] }
 validator = { version = "0.16", features = ["derive"] }
 rust-argon2 = "1.0.0"
-
-[dependencies.p256]
-version = "0.13.0"
-features = ["pem", "jwk", "default"]
-optional = false
-
-[dependencies.ed25519-dalek]
-git = "https://github.com/dalek-cryptography/ed25519-dalek"
-# version = "2.0.0-pre.0"
-features = ["pem", "default"]
-optional = false
+jwt-compact = { version = "0.7.0", features = ["p256", "ed25519-compact"] }
 
 [profile.release]
 codegen-units = 1

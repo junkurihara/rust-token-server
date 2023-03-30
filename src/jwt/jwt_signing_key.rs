@@ -1,4 +1,7 @@
-use super::alg::Algorithm;
+use super::{
+  alg::Algorithm,
+  token_with_meta::{Token, TokenInner, TokenMetaData},
+};
 use crate::{constants::*, db::entity::*, error::*, log::*};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
@@ -7,23 +10,6 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
-
-#[derive(Serialize, Debug, Clone)]
-pub struct Token {
-  pub id: String, // jwt itself is given here
-  pub refresh: Option<String>,
-  pub issued_at: String,
-  pub expires: String,
-  pub allowed_apps: Vec<String>, // allowed apps, i.e, client_ids
-  pub issuer: String,            // like 'https://....' for IdToken
-  pub subscriber_id: String,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct TokenMetaData {
-  username: String,
-  is_admin: bool,
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AdditionalClaimData {
@@ -36,7 +22,7 @@ pub fn generate_jwt(
   token_issuer: &str,
   signing_key: &JwtSigningKey,
   refresh_required: bool,
-) -> Result<(Token, TokenMetaData)> {
+) -> Result<Token> {
   let addition = AdditionalClaimData {
     is_admin: user.is_admin(),
   };
@@ -68,8 +54,8 @@ pub fn generate_jwt(
     None
   };
 
-  return Ok((
-    Token {
+  return Ok(Token {
+    inner: TokenInner {
       id: generated_jwt,
       refresh,
       issuer: iss,
@@ -78,11 +64,11 @@ pub fn generate_jwt(
       expires: exp,
       subscriber_id: user.subscriber_id().to_string(),
     },
-    TokenMetaData {
+    meta: TokenMetaData {
       username: user.username().to_owned(),
       is_admin: user.is_admin(),
     },
-  ));
+  });
 }
 
 pub enum JwtSigningKey {
@@ -118,10 +104,8 @@ impl JwtSigningKey {
       //   JwtSigningKey::HS512(k)
       // }
       Algorithm::ES256 => {
-        let private_key_res: Result<p256::SecretKey, p256::pkcs8::Error> =
-          p256::pkcs8::DecodePrivateKey::from_pkcs8_pem(key_str);
-        let private_key = private_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
-        let keypair = ES256KeyPair::from_bytes(private_key.to_bytes().as_ref())?;
+        let keypair = jwt_simple::algorithms::ES256KeyPair::from_pem(key_str)
+          .map_err(|e| anyhow!("Error decoding private key: {}", e))?;
         if with_key_id {
           let mut pk = keypair.public_key();
           JwtSigningKey::ES256(keypair.with_key_id(pk.create_key_id()))
@@ -130,11 +114,8 @@ impl JwtSigningKey {
         }
       }
       Algorithm::EdDSA => {
-        use ed25519_dalek::pkcs8::DecodePrivateKey;
-        let signing_key_res = ed25519_dalek::SigningKey::from_pkcs8_pem(key_str);
-        let signing_key = signing_key_res.map_err(|e| anyhow!("Error decoding private key: {}", e))?;
-        let keypair_bytes = signing_key.to_keypair_bytes();
-        let keypair = jwt_simple::algorithms::Ed25519KeyPair::from_bytes(keypair_bytes.as_ref())?;
+        let keypair = jwt_simple::algorithms::Ed25519KeyPair::from_pem(key_str)
+          .map_err(|e| anyhow!("Error decoding private key: {}", e))?;
         if with_key_id {
           let mut pk = keypair.public_key();
           JwtSigningKey::EdDSA(keypair.with_key_id(pk.create_key_id()))
@@ -243,7 +224,7 @@ mod tests {
       let token = generate_jwt(&user, client_id, token_issuer, &signing_key, refresh_required);
       assert!(token.is_ok());
 
-      let id_token = token.unwrap().0.id;
+      let id_token = token.unwrap().inner.id;
       let validation_result = signing_key.verify_token(&id_token, token_issuer, &None);
       assert!(validation_result.is_ok());
     }
