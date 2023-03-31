@@ -1,6 +1,7 @@
 use super::{
   alg::Algorithm,
   token::{Token, TokenInner, TokenMeta},
+  ClientId, Issuer,
 };
 use crate::{constants::*, db::entity::*, error::*, log::*};
 use jwt_simple::prelude::*;
@@ -12,7 +13,6 @@ use std::collections::HashSet;
 pub struct AdditionalClaimData {
   pub is_admin: bool,
 }
-
 pub enum JwtKeyPair {
   EdDSA(Ed25519KeyPair),
   ES256(ES256KeyPair),
@@ -80,18 +80,17 @@ impl JwtKeyPair {
   pub fn generate_token(
     &self,
     user: &User,
-    client_id: &str,
-    token_issuer: &str,
+    client_id: &ClientId,
+    token_issuer: &Issuer,
     refresh_required: bool,
   ) -> Result<Token> {
     let addition = AdditionalClaimData {
       is_admin: user.is_admin(),
     };
-    let mut audiences = HashSet::new();
-    audiences.insert(client_id);
+    let audiences = super::Audiences::new(client_id.as_str())?.into_string_hashset();
     let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
       .with_subject(user.subscriber_id())
-      .with_issuer(token_issuer)
+      .with_issuer(token_issuer.as_str())
       .with_audiences(audiences);
     let jwt_str = self.generate_jwt_string(claims)?;
     let inner = TokenInner::new(jwt_str, refresh_required)?;
@@ -105,14 +104,14 @@ impl JwtKeyPair {
   pub fn verify_token(
     &self,
     token: &str,
-    token_issuer: &str,
-    allowed_client_ids: &Option<Vec<String>>,
+    token_issuer: &Issuer,
+    allowed_audiences: &Option<super::Audiences>,
   ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
-    if let Some(allowed) = allowed_client_ids {
-      options.allowed_audiences = Some(HashSet::from_strings(allowed));
+    if let Some(allowed) = allowed_audiences {
+      options.allowed_audiences = Some(allowed.clone().into_string_hashset());
     }
-    options.allowed_issuers = Some(HashSet::from_strings(&[token_issuer]));
+    options.allowed_issuers = Some(HashSet::from_strings(&[token_issuer.as_str()]));
     self.verify_token_string(token, options)
   }
 
@@ -150,19 +149,19 @@ mod tests {
     assert!(user.is_ok());
     let user = user.unwrap();
 
-    let client_id = "client_id";
-    let token_issuer = "issuer";
+    let client_id = ClientId::new("client_id").expect("ClientId creation failed");
+    let token_issuer = Issuer::new("issuer").expect("Issuer creation failed");
     let refresh_required = true;
 
     let keys = [P256_PRIVATE_KEY, EDDSA_PRIVATE_KEY];
     let algs = [Algorithm::ES256, Algorithm::EdDSA];
     for (alg, key_str) in algs.iter().zip(keys.iter()) {
       let signing_key = JwtKeyPair::new(alg, key_str, false).unwrap();
-      let token = signing_key.generate_token(&user, client_id, token_issuer, refresh_required);
+      let token = signing_key.generate_token(&user, &client_id, &token_issuer, refresh_required);
       assert!(token.is_ok());
 
       let id_token = token.unwrap().inner.id;
-      let validation_result = signing_key.verify_token(&id_token, token_issuer, &None);
+      let validation_result = signing_key.verify_token(&id_token, &token_issuer, &None);
       assert!(validation_result.is_ok());
     }
   }

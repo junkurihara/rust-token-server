@@ -1,23 +1,17 @@
-// let pool = sqlx::SqlitePool::connect("sqlite:test.db").await.unwrap();
-// use std::str::FromStr;
-// let conn_opts = sqlx::sqlite::SqliteConnectOptions::from_str("sqlite:test.db")
-//   .unwrap()
-//   .create_if_missing(true);
-// let pool = sqlx::sqlite::SqlitePoolOptions::default()
-//   .connect_with(conn_opts)
-//   .await
-//   .unwrap();
-
 pub mod entity;
 pub mod table;
 
-// pub use self::table::SqliteUserTable;
-
 use self::table::UserTable;
-use crate::{constants::ADMIN_USERNAME, error::*, log::*};
+use crate::{
+  constants::{ADMIN_PASSWORD_VAR, ADMIN_USERNAME},
+  db::entity::Password,
+  error::*,
+  log::*,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use std::str::FromStr;
+use std::{env, str::FromStr};
 
+/// Setup sqlite database with automatic creation of user, client, refresh token tables
 pub async fn setup_sqlite(sqlite_url: &str) -> Result<table::SqliteUserTable> {
   let conn_opts = SqliteConnectOptions::from_str(sqlite_url)?.create_if_missing(true);
   let pool = SqlitePoolOptions::default().connect_with(conn_opts).await?;
@@ -43,9 +37,13 @@ If the admin password needs to be updated, call "admin" subcommand.
 "#
     );
 
-    // TODO: Using ENV var and consider client ids
-    // admin password should be passed as an env var?
-    let user = entity::User::new(&entity::Username::new(ADMIN_USERNAME)?, None)?;
+    let user = if let Ok(admin_password) = env::var(ADMIN_PASSWORD_VAR) {
+      let p = Password::new(admin_password)?;
+      entity::User::new(&entity::Username::new(ADMIN_USERNAME)?, Some(p))?
+    } else {
+      entity::User::new(&entity::Username::new(ADMIN_USERNAME)?, None)?
+    };
+
     user_table.add(user).await?;
   }
 

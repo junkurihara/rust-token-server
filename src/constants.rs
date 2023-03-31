@@ -3,10 +3,12 @@ pub const THREAD_NAME: &str = "id_token_server";
 pub const DEFAULT_ADDRESS: &str = "127.0.0.1";
 pub const DEFAULT_PORT: &str = "3000";
 
-// Default admin name that will be written to the database.
+/// Default admin name that will be written to the database.
 pub const ADMIN_USERNAME: &str = "admin";
-// Default password length when random password is needed at the user creation.
+/// Default password length when random password is needed at the user creation.
 pub const PASSWORD_LEN: usize = 32;
+/// Default environment variable of admin password
+pub const ADMIN_PASSWORD_VAR: &str = "ADMIN_PASSWORD";
 
 // Database settings
 pub const DB_FILE_PATH: &str = "./users.db";
@@ -31,6 +33,9 @@ pub const ARGON2_SALT_LEN: usize = 32;
 
 // ID Token settings
 pub const DEFAULT_ALGORITHM: &str = "ES256";
-pub const JWT_DURATION_MINS: usize = 30; // TODO: Clapで設定できるように
+// TODO: Clapで設定できるように
+pub const JWT_DURATION_MINS: usize = 30;
+// Default client ID if no client id check is required
+pub const DEFAUTL_CLIENT_ID: &str = "none";
 pub const REFRESH_TOKEN_LEN: usize = 256;
 pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60; // TODO: 30days, clapで設定できるように

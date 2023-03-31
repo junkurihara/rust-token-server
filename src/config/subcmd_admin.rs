@@ -21,13 +21,6 @@ impl ClapSubCommand for Admin {
           .help("SQLite database admin password"),
       )
       .arg(
-        Arg::new("client_ids")
-          .short('c')
-          .long("client-ids")
-          .value_name("IDs")
-          .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\""),
-      )
-      .arg(
         Arg::new("db_file_path")
           .short('d')
           .long("db-file-path")
@@ -56,7 +49,6 @@ impl ClapSubCommand for Admin {
     let admin_name = ADMIN_USERNAME;
     let admin_password = sub_m.get_one::<String>("admin_password");
 
-    let client_ids = sub_m.get_one::<String>("client_ids");
     // match client_ids {
     //   Some(cids) => user_db.init_db(
     //     admin_name.as_ref().map(AsRef::as_ref),

@@ -126,7 +126,9 @@ pub struct User {
 
 impl User {
   pub fn new(username: &Username, password: Option<Password>) -> Result<User> {
-    let password_unwrapped = password.unwrap_or({
+    let password_unwrapped = if let Some(p) = password {
+      p
+    } else {
       let random_pass = generate_random_string(PASSWORD_LEN)?;
       warn!(
         r#"
@@ -139,7 +141,7 @@ Password was automatically generated for the user of name "{}". Keep this secure
         random_pass.as_str()
       );
       Password::new(random_pass)?
-    });
+    };
     let subscriber_id = SubscriberId {
       value: Uuid::new_v4().to_string(),
     };
@@ -171,10 +173,10 @@ Password was automatically generated for the user of name "{}". Keep this secure
   }
 }
 
-#[cfg(test)]
-mod tests {
-  #[test]
-  fn ok() {
-    println!("ok");
-  }
-}
+// #[cfg(test)]
+// mod tests {
+//   #[test]
+//   fn ok() {
+//     println!("ok");
+//   }
+// }

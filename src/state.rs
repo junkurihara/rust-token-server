@@ -1,13 +1,29 @@
 use std::net::SocketAddr;
 
+use jwt_simple::prelude::JWTClaims;
+
 use crate::{
-  db::table::SqliteUserTable,
-  jwt::{Algorithm, JwtKeyPair},
+  db::{entity::User, table::SqliteUserTable},
+  error::*,
+  jwt::{AdditionalClaimData, Algorithm, Audiences, ClientId, Issuer, JwtKeyPair, Token},
 };
 
 pub struct CryptoState {
   pub algorithm: Algorithm,
-  pub signing_key: JwtKeyPair,
+  pub keypair: JwtKeyPair,
+  pub issuer: Issuer,
+  pub audiences: Option<Audiences>,
+}
+
+impl CryptoState {
+  pub fn generate_token(&self, user: &User, client_id: &ClientId, refresh_required: bool) -> Result<Token> {
+    self
+      .keypair
+      .generate_token(user, client_id, &self.issuer, refresh_required)
+  }
+  pub fn verify_token(&self, token: &str) -> Result<JWTClaims<AdditionalClaimData>> {
+    self.keypair.verify_token(token, &self.issuer, &self.audiences)
+  }
 }
 
 pub struct AppState {
@@ -15,3 +31,7 @@ pub struct AppState {
   pub crypto: CryptoState,
   pub user_table: SqliteUserTable,
 }
+
+// TODO: add token table
+
+// client ids = audiences テーブルは持つのをやめた。テーブルに格納する意味はあんまりなさそう。

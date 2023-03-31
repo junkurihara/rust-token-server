@@ -1,9 +1,9 @@
-use super::ClapSubCommand;
+use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
   db::setup_sqlite,
   error::*,
-  jwt::{Algorithm, AlgorithmType, JwtKeyPair},
+  jwt::{Algorithm, AlgorithmType, Audiences, Issuer, JwtKeyPair},
   state::{AppState, CryptoState},
 };
 use async_trait::async_trait;
@@ -31,6 +31,22 @@ impl ClapSubCommand for Run {
           .value_name("PORT")
           .default_value(DEFAULT_PORT)
           .help("Listen port"),
+      )
+      .arg(
+        Arg::new("token_issuer")
+          .short('t')
+          .long("token-issuer")
+          .required(true)
+          .value_parser(verify_url)
+          .value_name("URL")
+          .help("Issuer of Id token specified as URL like \"https://example.com/issue\""),
+      )
+      .arg(
+        Arg::new("client_ids")
+          .short('c')
+          .long("client-ids")
+          .value_name("IDs")
+          .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\". If not specified, any client can be connected."),
       )
       .arg(
         Arg::new("signing_key_path")
@@ -87,7 +103,7 @@ impl ClapSubCommand for Run {
     };
 
     let with_key_id = sub_m.get_flag("with_key_id");
-    let signing_key: JwtKeyPair = match sub_m.get_one::<String>("signing_key_path") {
+    let keypair: JwtKeyPair = match sub_m.get_one::<String>("signing_key_path") {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
           match algorithm.get_type() {
@@ -103,6 +119,17 @@ impl ClapSubCommand for Run {
       }
     };
 
+    let issuer = match sub_m.get_one::<String>("token_issuer") {
+      Some(t) => Issuer::new(t)?,
+      None => {
+        bail!("Issuer must be specified");
+      }
+    };
+
+    let audiences = sub_m
+      .get_one::<String>("client_ids")
+      .map(|s| Audiences::new(s).unwrap());
+
     let db_file_path: String = match sub_m.get_one::<String>("db_file_path") {
       Some(p) => p.to_string(),
       None => {
@@ -110,12 +137,17 @@ impl ClapSubCommand for Run {
       }
     };
 
-    // TODO: returns client_id table and token table as well
+    // TODO: returns token table as well
     let user_table = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
 
     Ok(Some(AppState {
       listen_socket,
-      crypto: CryptoState { algorithm, signing_key },
+      crypto: CryptoState {
+        algorithm,
+        keypair,
+        issuer,
+        audiences,
+      },
       user_table,
     }))
 
@@ -134,13 +166,5 @@ impl ClapSubCommand for Run {
     // if !ignore_client_id {
     //   info!("allowed_client_ids {:?}", client_ids);
     // }
-
-    // // get issuer
-    // let token_issuer = match matches.get_one::<String>("token_issuer") {
-    //   Some(t) => t,
-    //   None => {
-    //     bail!("Issuer must be specified");
-    //   }
-    // };
   }
 }

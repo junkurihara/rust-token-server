@@ -10,13 +10,16 @@ mod state;
 
 // use crate::api_create_user::create_user;
 use crate::{
-  apis::{health_check, jwks},
+  apis::{get_tokens, health_check, jwks},
   constants::*,
   error::*,
   log::*,
   state::AppState,
 };
-use axum::{routing::get, Router, Server};
+use axum::{
+  routing::{get, post},
+  Router, Server,
+};
 use config::parse_opts;
 use std::sync::Arc;
 use tokio::runtime::Builder;
@@ -52,7 +55,10 @@ async fn define_route(shared_state: Arc<AppState>) {
   info!("Listening on {}", &addr);
 
   // routes nested under /v1.0
-  let api_routes = Router::new().route("/jwks", get(jwks)).with_state(shared_state);
+  let api_routes = Router::new()
+    .route("/jwks", get(jwks))
+    .route("/tokens", post(get_tokens))
+    .with_state(shared_state);
 
   let router = Router::new()
     .route("/", get(root))

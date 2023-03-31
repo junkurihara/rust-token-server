@@ -104,3 +104,52 @@ fn generate_refresh() -> String {
     .map(char::from)
     .collect()
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::db::entity::{Password, Username};
+
+  use super::*;
+
+  #[test]
+  fn test_token_inner() {
+    let test_vector = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2ODAyNjIxNTgsImV4cCI6MTY4MDI2Mzk1OCwibmJmIjoxNjgwMjYyMTU4LCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJhNDYzZTY2Yi1jOThhLTQ4MjAtYWQyNy1mMzg3NGZlMmYzOTEiLCJhdWQiOlsiY2xpZW50X2lkIl0sImlzX2FkbWluIjpmYWxzZX0.tkR9CdX0sMRuI7jS_VGRs9Lojn7Xbuv1YXgnp0QkgiP1vMDo9xKPz7b5VmpaMI0Jg9muazdBbzZxhabJC9qiCA";
+
+    let token_inner = TokenInner::new(test_vector.to_string(), true).expect("Token inner is invalid");
+    assert!(token_inner.refresh.is_some());
+    assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
+    assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
+    assert_eq!(token_inner.allowed_apps, vec!["client_id".to_string()]);
+    assert_eq!(&token_inner.issuer, "issuer");
+    assert_eq!(&token_inner.subscriber_id, "a463e66b-c98a-4820-ad27-f3874fe2f391");
+
+    let token_inner = TokenInner::new(test_vector.to_string(), false).expect("Token inner is invalid");
+    assert!(token_inner.refresh.is_none());
+    assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
+    assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
+    assert_eq!(token_inner.allowed_apps, vec!["client_id".to_string()]);
+    assert_eq!(&token_inner.issuer, "issuer");
+    assert_eq!(&token_inner.subscriber_id, "a463e66b-c98a-4820-ad27-f3874fe2f391");
+  }
+  #[test]
+  fn test_token_meta() {
+    let username = Username::new("test_user").expect("username creation failed");
+    let password = Password::new("test_pass").expect("password creation failed");
+    let user = User::new(&username, Some(password)).expect("user creation failed");
+    let token_meta = TokenMeta::new(&user);
+    assert_eq!(token_meta.username, "test_user".to_string());
+    assert!(!token_meta.is_admin);
+
+    let username = Username::new("admin").expect("username creation failed");
+    let password = Password::new("test_pass").expect("password creation failed");
+    let user = User::new(&username, Some(password)).expect("user creation failed");
+    let token_meta = TokenMeta::new(&user);
+    assert_eq!(token_meta.username, "admin".to_string());
+    assert!(token_meta.is_admin);
+  }
+  #[test]
+  fn test_refresh() {
+    let refresh = generate_refresh();
+    assert_eq!(refresh.len(), REFRESH_TOKEN_LEN);
+  }
+}
