@@ -94,6 +94,8 @@ pub async fn get_tokens(
     return Err(GetTokensError::TokenCreationFailed)
   };
 
+  // TODO: add refresh token to db
+
   Ok(Json(TokensResponse {
     token: token.inner,
     metadata: token.meta,

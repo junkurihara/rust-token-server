@@ -7,10 +7,10 @@ create table if not exists users (
   is_admin integer
 );
 
-create table if not exists client_ids (
-  id integer primary key,
-  client_id text not null unique
-);
+-- create table if not exists client_ids (
+--   id integer primary key,
+--   client_id text not null unique
+-- );
 
 create table if not exists tokens (
   id integer primary key,
