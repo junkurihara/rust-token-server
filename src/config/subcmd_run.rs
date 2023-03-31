@@ -3,7 +3,7 @@ use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
   db::setup_sqlite,
   error::*,
-  jwt::{Algorithm, AlgorithmType, JwtSigningKey},
+  jwt::{Algorithm, AlgorithmType, JwtKeyPair},
   state::{AppState, CryptoState},
 };
 use async_trait::async_trait;
@@ -87,12 +87,12 @@ impl ClapSubCommand for Run {
     };
 
     let with_key_id = sub_m.get_flag("with_key_id");
-    let signing_key: JwtSigningKey = match sub_m.get_one::<String>("signing_key_path") {
+    let signing_key: JwtKeyPair = match sub_m.get_one::<String>("signing_key_path") {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
           match algorithm.get_type() {
-            AlgorithmType::Ec | AlgorithmType::Okp => JwtSigningKey::new(&algorithm, &content, with_key_id)?,
-            _ => bail!("Unsupported"),
+            AlgorithmType::Ec | AlgorithmType::Okp => JwtKeyPair::new(&algorithm, &content, with_key_id)?,
+            // _ => bail!("Unsupported"),
           }
         } else {
           bail!("Failed to read private key");

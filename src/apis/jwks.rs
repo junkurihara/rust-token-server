@@ -1,16 +1,10 @@
-use crate::{jwt::JwtSigningKey, state::AppState};
+use crate::state::AppState;
 use axum::{
   extract::State,
   http::StatusCode,
   response::{IntoResponse, Response},
   Json,
 };
-use jwt_compact::{
-  alg::{Ed25519, Es256, VerifyingKey},
-  jwk::JsonWebKey,
-  Algorithm,
-};
-use jwt_simple::{algorithms::ECDSAP256PublicKeyLike, prelude::EdDSAPublicKeyLike};
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;

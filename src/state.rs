@@ -2,12 +2,12 @@ use std::net::SocketAddr;
 
 use crate::{
   db::table::SqliteUserTable,
-  jwt::{Algorithm, JwtSigningKey},
+  jwt::{Algorithm, JwtKeyPair},
 };
 
 pub struct CryptoState {
   pub algorithm: Algorithm,
-  pub signing_key: JwtSigningKey,
+  pub signing_key: JwtKeyPair,
 }
 
 pub struct AppState {

@@ -36,7 +36,7 @@ fn main() -> Result<()> {
       }
       Ok(None) => {
         // TODO:
-        warn!("something init");
+        warn!("something init maybe admin password update");
       }
       Err(e) => {
         error!("{e}");
