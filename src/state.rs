@@ -6,7 +6,7 @@ use crate::{
   entity::User,
   error::*,
   jwt::{AdditionalClaimData, Algorithm, Audiences, ClientId, Issuer, JwtKeyPair, Token},
-  table::SqliteUserTable,
+  table::{SqliteRefreshTokenTable, SqliteUserTable},
 };
 
 pub struct CryptoState {
@@ -31,6 +31,7 @@ pub struct AppState {
   pub listen_socket: SocketAddr,
   pub crypto: CryptoState,
   pub user_table: SqliteUserTable,
+  pub refresh_token_table: SqliteRefreshTokenTable,
 }
 
 // TODO: add token table

@@ -14,7 +14,7 @@ pub const ADMIN_PASSWORD_VAR: &str = "ADMIN_PASSWORD";
 pub const DB_FILE_PATH: &str = "./users.db";
 pub const USER_TABLE_NAME: &str = "users";
 // pub const ALLOWED_CLIENT_TABLE_NAME: &str = "client_ids";
-pub const TOKEN_TABLE_NAME: &str = "tokens";
+pub const REFRESH_TOKEN_TABLE_NAME: &str = "tokens";
 
 // Argon2 password hashing params
 use argon2::{Config, ThreadMode, Variant, Version};

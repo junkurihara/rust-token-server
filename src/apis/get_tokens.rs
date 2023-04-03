@@ -1,7 +1,7 @@
 use super::{request::TokensRequest, response::TokensResponse};
 use crate::{
-  argon2::verify_argon2, constants::DEFAUTL_CLIENT_ID, jwt::ClientId, log::*, state::AppState, table::UserSearchKey,
-  table::UserTable,
+  argon2::verify_argon2, constants::DEFAUTL_CLIENT_ID, entity::RefreshToken, jwt::ClientId, log::*, state::AppState,
+  table::UserSearchKey, table::UserTable,
 };
 use axum::{
   extract::State,
@@ -90,7 +90,23 @@ pub async fn get_tokens(
     return Err(GetTokensError::TokenCreationFailed)
   };
 
-  // TODO: add refresh token to db
+  // Record refresh token to db
+  let Ok(refresh) = RefreshToken::try_from(&token) else {
+    error!("Failed to retrieve refresh token from token struct");
+    return Err(GetTokensError::TokenCreationFailed)
+  };
+  if state.refresh_token_table.add_and_prune(&refresh).await.is_err() {
+    error!("Failed to store refresh token");
+    return Err(GetTokensError::TokenCreationFailed);
+  };
+
+  // //test
+  // let refresh_token_string = token.clone().inner.refresh.unwrap();
+  // let res = state
+  //   .refresh_token_table
+  //   .prune_and_find(&refresh_token_string, &client_id)
+  //   .await;
+  // warn!("{:#?}", res);
 
   Ok(Json(TokensResponse {
     token: token.inner,

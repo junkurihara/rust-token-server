@@ -1,14 +1,18 @@
+mod refresh_table;
 mod user_table;
 
 use crate::{
   constants::{ADMIN_PASSWORD_VAR, ADMIN_USERNAME},
-  entity::{Password, SubscriberId, User, Username},
+  entity::{Password, RefreshToken, RefreshTokenInner, SubscriberId, User, Username},
   error::*,
+  jwt::ClientId,
   log::*,
 };
 use async_trait::async_trait;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, str::FromStr};
+
+pub use refresh_table::SqliteRefreshTokenTable;
 pub use user_table::SqliteUserTable;
 
 pub enum UserSearchKey<'a> {
@@ -22,15 +26,26 @@ pub trait UserTable {
   async fn find_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<Option<User>>;
 }
 
+#[async_trait]
+pub trait RefreshTokenTable {
+  async fn add<'a>(&self, refresh_token: &'a RefreshToken) -> Result<()>;
+  async fn find_refresh_token<'a>(
+    &self,
+    refresh_token_string: &'a RefreshTokenInner,
+    client_id: &'a ClientId,
+  ) -> Result<Option<RefreshToken>>;
+  async fn prune_expired(&self) -> Result<()>;
+}
+
 /// Setup sqlite database with automatic creation of user, client, refresh token tables
-pub async fn setup_sqlite(sqlite_url: &str) -> Result<user_table::SqliteUserTable> {
+pub async fn setup_sqlite(sqlite_url: &str) -> Result<(SqliteUserTable, SqliteRefreshTokenTable)> {
   let conn_opts = SqliteConnectOptions::from_str(sqlite_url)?.create_if_missing(true);
   let pool = SqlitePoolOptions::default().connect_with(conn_opts).await?;
 
   // Embed migrations into binary
   sqlx::migrate!("./migrations").run(&pool).await?;
 
-  let user_table = user_table::SqliteUserTable::new(pool.clone());
+  let user_table = SqliteUserTable::new(pool.clone());
 
   // Check existence of admin
   let res = user_table
@@ -58,5 +73,7 @@ If the admin password needs to be updated, call "admin" subcommand.
     user_table.add(user).await?;
   }
 
-  Ok(user_table)
+  let refresh_token_table = SqliteRefreshTokenTable::new(pool);
+
+  Ok((user_table, refresh_token_table))
 }

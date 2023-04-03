@@ -1,7 +1,10 @@
-use crate::{constants::*, entity::User, error::*, log::*};
+use crate::{
+  entity::{RefreshTokenInner, User},
+  error::*,
+  log::*,
+};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt;
@@ -9,7 +12,7 @@ use std::fmt;
 #[derive(Serialize, Debug, Clone)]
 pub struct TokenInner {
   pub id: String, // id_token jwt itself is given here as string
-  pub refresh: Option<String>,
+  pub refresh: Option<RefreshTokenInner>,
   pub issued_at: String,
   pub expires: String,
   pub allowed_apps: Vec<String>, // allowed apps, i.e, client_ids
@@ -29,8 +32,8 @@ impl fmt::Display for TokenInner {
 
 #[derive(Serialize, Debug, Clone)]
 pub struct TokenMeta {
-  pub(super) username: String,
-  pub(super) is_admin: bool,
+  pub username: String,
+  pub is_admin: bool,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -69,9 +72,9 @@ impl TokenInner {
     let issued_at: DateTime<Local> = Local.timestamp_opt(iat, 0).unwrap();
     let expires: DateTime<Local> = Local.timestamp_opt(exp, 0).unwrap();
 
-    let refresh: Option<String> = if refresh_required {
+    let refresh: Option<RefreshTokenInner> = if refresh_required {
       debug!("[{subscriber_id}] Create refresh token");
-      Some(generate_refresh())
+      Some(RefreshTokenInner::new()?)
     } else {
       None
     };
@@ -97,17 +100,12 @@ impl TokenMeta {
   }
 }
 
-fn generate_refresh() -> String {
-  thread_rng()
-    .sample_iter(&Alphanumeric)
-    .take(REFRESH_TOKEN_LEN)
-    .map(char::from)
-    .collect()
-}
-
 #[cfg(test)]
 mod tests {
-  use crate::entity::{Password, Username};
+  use crate::{
+    constants::REFRESH_TOKEN_LEN,
+    entity::{Password, Username},
+  };
 
   use super::*;
 
@@ -149,7 +147,7 @@ mod tests {
   }
   #[test]
   fn test_refresh() {
-    let refresh = generate_refresh();
-    assert_eq!(refresh.len(), REFRESH_TOKEN_LEN);
+    let refresh = RefreshTokenInner::new().expect("Refresh token creation failed");
+    assert_eq!(refresh.as_str().len(), REFRESH_TOKEN_LEN);
   }
 }

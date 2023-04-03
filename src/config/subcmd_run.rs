@@ -138,7 +138,7 @@ impl ClapSubCommand for Run {
     };
 
     // TODO: returns token table as well
-    let user_table = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
+    let (user_table, refresh_token_table) = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
 
     Ok(Some(AppState {
       listen_socket,
@@ -149,6 +149,7 @@ impl ClapSubCommand for Run {
         audiences,
       },
       user_table,
+      refresh_token_table,
     }))
 
     // // Setting up globals

@@ -1,6 +1,5 @@
 mod alg;
 mod jwt_key_pair;
-// mod keypair;
 mod token;
 
 use crate::error::*;
