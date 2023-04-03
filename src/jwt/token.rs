@@ -1,4 +1,4 @@
-use crate::{constants::*, db::entity::User, error::*, log::*};
+use crate::{constants::*, entity::User, error::*, log::*};
 use base64::Engine;
 use chrono::{DateTime, Local, TimeZone};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -107,7 +107,7 @@ fn generate_refresh() -> String {
 
 #[cfg(test)]
 mod tests {
-  use crate::db::entity::{Password, Username};
+  use crate::entity::{Password, Username};
 
   use super::*;
 

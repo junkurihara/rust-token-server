@@ -3,7 +3,7 @@ use super::{
   token::{Token, TokenInner, TokenMeta},
   ClientId, Issuer,
 };
-use crate::{constants::*, db::entity::*, error::*, log::*};
+use crate::{constants::*, entity::*, error::*, log::*};
 use jwt_simple::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

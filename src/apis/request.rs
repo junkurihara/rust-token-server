@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use crate::{
-  db::entity::{Password, Username},
+  entity::{Password, Username},
   error::*,
 };
 

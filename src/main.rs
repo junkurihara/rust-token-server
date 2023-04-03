@@ -2,11 +2,12 @@ mod apis;
 mod argon2;
 mod config;
 mod constants;
-mod db;
+mod entity;
 mod error;
 mod jwt;
 mod log;
 mod state;
+mod table;
 
 // use crate::api_create_user::create_user;
 use crate::{

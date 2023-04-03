@@ -1,5 +1,5 @@
-use super::{super::entity::*, UserSearchKey, UserTable};
-use crate::{constants::*, error::*};
+use super::{UserSearchKey, UserTable};
+use crate::{constants::*, entity::*, error::*};
 use async_trait::async_trait;
 use sqlx::sqlite::SqlitePool;
 use std::convert::{From, TryInto};

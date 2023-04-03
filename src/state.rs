@@ -3,9 +3,10 @@ use std::net::SocketAddr;
 use jwt_simple::prelude::JWTClaims;
 
 use crate::{
-  db::{entity::User, table::SqliteUserTable},
+  entity::User,
   error::*,
   jwt::{AdditionalClaimData, Algorithm, Audiences, ClientId, Issuer, JwtKeyPair, Token},
+  table::SqliteUserTable,
 };
 
 pub struct CryptoState {

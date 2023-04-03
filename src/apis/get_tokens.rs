@@ -1,11 +1,7 @@
 use super::{request::TokensRequest, response::TokensResponse};
 use crate::{
-  argon2::verify_argon2,
-  constants::DEFAUTL_CLIENT_ID,
-  db::table::{UserSearchKey, UserTable},
-  jwt::ClientId,
-  log::*,
-  state::AppState,
+  argon2::verify_argon2, constants::DEFAUTL_CLIENT_ID, jwt::ClientId, log::*, state::AppState, table::UserSearchKey,
+  table::UserTable,
 };
 use axum::{
   extract::State,

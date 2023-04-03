@@ -1,10 +1,10 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
-  db::setup_sqlite,
   error::*,
   jwt::{Algorithm, AlgorithmType, Audiences, Issuer, JwtKeyPair},
   state::{AppState, CryptoState},
+  table::setup_sqlite,
 };
 use async_trait::async_trait;
 use clap::{Arg, ArgMatches, Command};
