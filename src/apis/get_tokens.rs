@@ -1,7 +1,10 @@
 use super::{request::TokensRequest, response::TokensResponse};
 use crate::{
-  argon2::verify_argon2, constants::DEFAUTL_CLIENT_ID, entity::RefreshToken, jwt::ClientId, log::*, state::AppState,
-  table::UserSearchKey, table::UserTable,
+  constants::DEFAUTL_CLIENT_ID,
+  entity::{ClientId, RefreshToken},
+  log::*,
+  state::AppState,
+  table::{UserSearchKey, UserTable},
 };
 use axum::{
   extract::State,
@@ -42,12 +45,8 @@ pub async fn get_tokens(
   State(state): State<Arc<AppState>>,
   Json(input): Json<TokensRequest>,
 ) -> Result<Json<TokensResponse>, GetTokensError> {
-  let login_info = input.auth;
-
-  // Check username and password form
-  let (Ok(username), Ok(password)) = (login_info.username(), login_info.password()) else {
-    return Err(GetTokensError::InvalidRequest);
-  };
+  // Getusername and password form
+  let (username, password) = (input.auth.username, input.auth.password);
 
   // check user existence
   let Ok(user) = state.table.user.find_user(UserSearchKey::Username(&username)).await else{
@@ -59,7 +58,7 @@ pub async fn get_tokens(
   // check allowed client ids if audience is some
   let client_id = if state.crypto.audiences.is_some() {
     let Some(client_id) = input.client_id else {
-      return Err(GetTokensError::UnauthorizedClientApp);
+      return Err(GetTokensError::InvalidRequest);
     };
     if !state.crypto.audiences.as_ref().unwrap().contains(&client_id) {
       return Err(GetTokensError::UnauthorizedClientApp);
@@ -74,7 +73,7 @@ pub async fn get_tokens(
   };
 
   // verify password
-  let Ok(password_verified) = verify_argon2(password.as_str(), user.encoded_hash()) else {
+  let Ok(password_verified) = password.verify(&user.encoded_hash) else {
     return Err(GetTokensError::Argon2Failure);
   };
   if !password_verified {

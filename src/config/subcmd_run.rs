@@ -1,8 +1,9 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
+  entity::Audiences,
   error::*,
-  jwt::{Algorithm, AlgorithmType, Audiences, Issuer, JwtKeyPair},
+  jwt::{Algorithm, AlgorithmType, Issuer, JwtKeyPair},
   state::{AppState, CryptoState, TableState},
   table::setup_sqlite,
 };
@@ -137,7 +138,7 @@ impl ClapSubCommand for Run {
       }
     };
 
-    // TODO: returns token table as well
+    // returns user and valid refresh token tables
     let (user_table, refresh_token_table) = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
 
     Ok(Some(AppState {

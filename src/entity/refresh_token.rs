@@ -1,8 +1,8 @@
-use super::SubscriberId;
+use super::{ClientId, SubscriberId};
 use crate::{
   constants::{REFRESH_TOKEN_DURATION_MINS, REFRESH_TOKEN_LEN},
   error::*,
-  jwt::{ClientId, Token},
+  jwt::Token,
 };
 use chrono::{DateTime, Duration, Local};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -30,8 +30,13 @@ impl<'a> TryFrom<&'a Token> for RefreshToken {
       .as_ref()
       .ok_or_else(|| anyhow!("No refresh token"))?
       .to_owned();
-    let subscriber_id = SubscriberId::new(&value.inner.subscriber_id)?;
-    let client_id = ClientId::new(value.inner.allowed_apps.get(0).ok_or_else(|| anyhow!("No client id"))?)?;
+    let subscriber_id = value.inner.subscriber_id.clone();
+    let client_id = value
+      .inner
+      .allowed_apps
+      .get_one()
+      .ok_or_else(|| anyhow!("No client id"))?
+      .to_owned();
     let expires = Local::now() + Duration::minutes(REFRESH_TOKEN_DURATION_MINS as i64);
     Ok(Self {
       inner,

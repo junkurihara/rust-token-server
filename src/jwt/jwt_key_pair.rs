@@ -1,9 +1,14 @@
 use super::{
   alg::Algorithm,
   token::{Token, TokenInner, TokenMeta},
-  ClientId, Issuer,
+  Issuer,
 };
-use crate::{constants::*, entity::User, error::*, log::*};
+use crate::{
+  constants::*,
+  entity::{Audiences, ClientId, User},
+  error::*,
+  log::*,
+};
 use jwt_simple::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -87,7 +92,7 @@ impl JwtKeyPair {
     let addition = AdditionalClaimData {
       is_admin: user.is_admin(),
     };
-    let audiences = super::Audiences::new(client_id.as_str())?.into_string_hashset();
+    let audiences = Audiences::new(client_id.as_str())?.into_string_hashset();
     let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
       .with_subject(user.subscriber_id())
       .with_issuer(token_issuer.as_str())
@@ -105,7 +110,7 @@ impl JwtKeyPair {
     &self,
     token: &str,
     token_issuer: &Issuer,
-    allowed_audiences: &Option<super::Audiences>,
+    allowed_audiences: &Option<Audiences>,
   ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = allowed_audiences {

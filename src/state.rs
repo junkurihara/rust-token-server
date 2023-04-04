@@ -3,9 +3,9 @@ use std::net::SocketAddr;
 use jwt_simple::prelude::JWTClaims;
 
 use crate::{
-  entity::User,
+  entity::{Audiences, ClientId, User},
   error::*,
-  jwt::{AdditionalClaimData, Algorithm, Audiences, ClientId, Issuer, JwtKeyPair, Token},
+  jwt::{AdditionalClaimData, Algorithm, Issuer, JwtKeyPair, Token},
   table::{SqliteRefreshTokenTable, SqliteUserTable},
 };
 

@@ -19,13 +19,6 @@ pub fn verify_argon2(password: &str, encoded_hash: &str) -> Result<bool> {
   Ok(matches)
 }
 
-pub fn generate_random_string(length: usize) -> Result<String> {
-  const BASE_STR: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let mut rng = &mut rand::thread_rng();
-  let res = String::from_utf8(BASE_STR.as_bytes().choose_multiple(&mut rng, length).cloned().collect())?;
-  Ok(res)
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -41,12 +34,5 @@ mod tests {
     let verify = verify_argon2(password, &hash);
     assert!(verify.is_ok());
     assert!(verify.unwrap());
-  }
-  #[test]
-  fn random_string_works() {
-    let length = 32;
-    let random_string = generate_random_string(length);
-    assert!(random_string.is_ok());
-    assert_eq!(random_string.unwrap().len(), length);
   }
 }

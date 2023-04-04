@@ -3,9 +3,8 @@ mod user_table;
 
 use crate::{
   constants::{ADMIN_PASSWORD_VAR, ADMIN_USERNAME},
-  entity::{Password, RefreshToken, RefreshTokenInner, SubscriberId, User, Username},
+  entity::{ClientId, Password, RefreshToken, RefreshTokenInner, SubscriberId, User, Username},
   error::*,
-  jwt::ClientId,
   log::*,
 };
 use async_trait::async_trait;

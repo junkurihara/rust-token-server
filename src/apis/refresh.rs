@@ -1,6 +1,10 @@
 use super::{request::RefreshRequest, response::TokensResponse};
 use crate::{
-  constants::DEFAUTL_CLIENT_ID, jwt::ClientId, log::*, state::AppState, table::UserSearchKey, table::UserTable,
+  constants::DEFAUTL_CLIENT_ID,
+  entity::ClientId,
+  log::*,
+  state::AppState,
+  table::{UserSearchKey, UserTable},
 };
 use axum::{
   extract::State,

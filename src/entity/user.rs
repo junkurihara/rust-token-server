@@ -1,32 +1,14 @@
+use super::{Password, Username};
 use crate::{
-  argon2::*,
   constants::{ADMIN_USERNAME, PASSWORD_LEN},
   error::*,
   log::*,
 };
+use rand::prelude::*;
+use serde::Serialize;
 use std::borrow::Cow;
 use uuid::Uuid;
 use validator::Validate;
-
-#[derive(Debug, Clone, Eq, PartialEq, Validate)]
-pub struct Username {
-  #[validate(length(min = 1))]
-  value: String,
-}
-impl Username {
-  pub fn new<'a>(username: impl Into<Cow<'a, str>>) -> Result<Self> {
-    let value = username.into().to_string();
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn as_str(&self) -> &str {
-    &self.value
-  }
-  pub fn into_string(self) -> String {
-    self.value
-  }
-}
 
 #[derive(Debug, Clone, Validate)]
 pub struct SubscriberId {
@@ -45,6 +27,14 @@ impl SubscriberId {
   }
   pub fn into_string(self) -> String {
     self.value
+  }
+}
+impl Serialize for SubscriberId {
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    serializer.serialize_str(self.as_str())
   }
 }
 
@@ -90,29 +80,12 @@ impl IsAdmin {
     self.value
   }
 }
-
-#[derive(Debug, Clone, Validate)]
-pub struct Password {
-  #[validate(length(min = 1))]
-  value: String,
-}
-impl Password {
-  pub fn new<'a>(password: impl Into<Cow<'a, str>>) -> Result<Self> {
-    let value = password.into().to_string();
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn as_str(&self) -> &str {
-    &self.value
-  }
-  #[allow(dead_code)]
-  pub fn into_string(self) -> String {
-    self.value
-  }
-  pub fn hash(&self) -> Result<String> {
-    let argon2_hash = generate_argon2(self.as_str())?;
-    Ok(argon2_hash)
+impl Serialize for IsAdmin {
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    serializer.serialize_bool(self.get())
   }
 }
 
@@ -173,10 +146,21 @@ Password was automatically generated for the user of name "{}". Keep this secure
   }
 }
 
-// #[cfg(test)]
-// mod tests {
-//   #[test]
-//   fn ok() {
-//     println!("ok");
-//   }
-// }
+fn generate_random_string(length: usize) -> Result<String> {
+  const BASE_STR: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let mut rng = &mut rand::thread_rng();
+  let res = String::from_utf8(BASE_STR.as_bytes().choose_multiple(&mut rng, length).cloned().collect())?;
+  Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  #[test]
+  fn random_string_works() {
+    let length = 32;
+    let random_string = generate_random_string(length);
+    assert!(random_string.is_ok());
+    assert_eq!(random_string.unwrap().len(), length);
+  }
+}

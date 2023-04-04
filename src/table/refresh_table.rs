@@ -1,5 +1,5 @@
 use super::RefreshTokenTable;
-use crate::{constants::*, entity::*, error::*, jwt::ClientId};
+use crate::{constants::*, entity::*, error::*};
 use async_trait::async_trait;
 use chrono::TimeZone;
 use sqlx::sqlite::SqlitePool;
