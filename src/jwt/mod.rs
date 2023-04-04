@@ -3,6 +3,10 @@ mod jwt_key_pair;
 mod token;
 
 use crate::error::*;
+use serde::{
+  de::{self, Visitor},
+  Deserialize, Serialize,
+};
 use std::{borrow::Cow, collections::HashSet};
 use validator::Validate;
 
@@ -74,5 +78,38 @@ impl ClientId {
   }
   pub fn into_string(self) -> String {
     self.value
+  }
+}
+impl Serialize for ClientId {
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'de> Deserialize<'de> for ClientId {
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    struct ClientIdVisitor;
+    impl<'de> Visitor<'de> for ClientIdVisitor {
+      type Value = String;
+      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("refresh token string")
+      }
+      fn visit_str<E>(self, str: &str) -> Result<Self::Value, E>
+      where
+        E: de::Error,
+      {
+        Ok(str.to_owned())
+      }
+    }
+
+    let value = deserializer.deserialize_str(ClientIdVisitor)?;
+
+    Ok(Self { value })
   }
 }

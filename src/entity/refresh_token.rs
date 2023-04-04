@@ -6,7 +6,10 @@ use crate::{
 };
 use chrono::{DateTime, Duration, Local};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{
+  de::{self, Visitor},
+  Deserialize, Serialize,
+};
 use std::convert::TryFrom;
 use validator::Validate;
 
@@ -86,25 +89,22 @@ impl<'de> Deserialize<'de> for RefreshTokenInner {
   where
     D: serde::Deserializer<'de>,
   {
-    // let v: Result<String, D::Error> = deserializer.deserialize_string(self);
-
     struct RefreshTokenInnerVisitor;
     impl<'de> Visitor<'de> for RefreshTokenInnerVisitor {
-      type Value = RefreshTokenInner;
+      type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("refresh token string")
       }
-      fn visit_str<E>(self, value: &str) -> Result<RefreshTokenInner, E>
+      fn visit_str<E>(self, str: &str) -> Result<Self::Value, E>
       where
-        E: serde::de::Error,
+        E: de::Error,
       {
-        let object = RefreshTokenInner {
-          value: value.to_string(),
-        };
-        object.validate().map_err(|e| serde::de::Error::custom(e))?;
-        Ok(object)
+        Ok(str.to_owned())
       }
     }
-    todo!()
+
+    let value = deserializer.deserialize_str(RefreshTokenInnerVisitor)?;
+
+    Ok(Self { value })
   }
 }

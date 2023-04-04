@@ -11,7 +11,7 @@ mod table;
 
 // use crate::api_create_user::create_user;
 use crate::{
-  apis::{get_tokens, health_check, jwks},
+  apis::{get_tokens, health_check, jwks, refresh},
   constants::*,
   error::*,
   log::*,
@@ -59,21 +59,17 @@ async fn define_route(shared_state: Arc<AppState>) {
   let api_routes = Router::new()
     .route("/jwks", get(jwks))
     .route("/tokens", post(get_tokens))
+    .route("/refresh", post(refresh))
+    //.route("/create_user", post(create_user));
     .with_state(shared_state);
 
   let router = Router::new()
-    .route("/", get(root))
     .route("/health", get(health_check))
     .nest("/v1.0", api_routes);
-  //.route("/create_user", post(create_user));
 
   let server = Server::bind(&addr).serve(router.into_make_service());
 
   if let Err(e) = server.await {
     error!("Server is down!: {e}");
   }
-}
-
-async fn root() -> &'static str {
-  "Hello World!"
 }

@@ -1,8 +1,9 @@
 use serde::Deserialize;
 
 use crate::{
-  entity::{Password, Username},
+  entity::{Password, RefreshTokenInner, Username},
   error::*,
+  jwt::ClientId,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -22,5 +23,11 @@ impl PasswordCredentialRequest {
 #[derive(Deserialize, Debug, Clone)]
 pub struct TokensRequest {
   pub auth: PasswordCredentialRequest,
-  pub client_id: Option<String>,
+  pub client_id: Option<ClientId>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct RefreshRequest {
+  pub refresh_token: RefreshTokenInner,
+  pub client_id: Option<ClientId>,
 }

@@ -33,6 +33,26 @@ impl UserTable for SqliteUserTable {
     Ok(())
   }
 
+  async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()> {
+    let encoded_hash = EncodedHash::new(new_password)?;
+    let sql = match user_search_key {
+      UserSearchKey::SubscriberId(sub_id) => format!(
+        "update {} set encoded_hash=\"{}\" where subscriber_id=\"{}\"",
+        USER_TABLE_NAME,
+        encoded_hash.as_str(),
+        sub_id.as_str()
+      ),
+      UserSearchKey::Username(username) => format!(
+        "update {} set encoded_hash=\"{}\" where username=\"{}\"",
+        USER_TABLE_NAME,
+        encoded_hash.as_str(),
+        username.as_str()
+      ),
+    };
+    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    Ok(())
+  }
+
   async fn find_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<Option<User>> {
     let sql = match user_search_key {
       UserSearchKey::SubscriberId(sub_id) => format!(

@@ -50,7 +50,7 @@ pub async fn get_tokens(
   };
 
   // check user existence
-  let Ok(user) = state.user_table.find_user(UserSearchKey::Username(&username)).await else{
+  let Ok(user) = state.table.user.find_user(UserSearchKey::Username(&username)).await else{
     return Err(GetTokensError::TokenCreationFailed);
   };
   let Some(user) = user else {
@@ -58,11 +58,8 @@ pub async fn get_tokens(
   };
   // check allowed client ids if audience is some
   let client_id = if state.crypto.audiences.is_some() {
-    let Some(client_id_str) = input.client_id else {
+    let Some(client_id) = input.client_id else {
       return Err(GetTokensError::UnauthorizedClientApp);
-    };
-    let Ok(client_id) = ClientId::new(client_id_str) else {
-        return Err(GetTokensError::InvalidRequest);
     };
     if !state.crypto.audiences.as_ref().unwrap().contains(&client_id) {
       return Err(GetTokensError::UnauthorizedClientApp);
@@ -86,6 +83,7 @@ pub async fn get_tokens(
 
   debug!("{} is verified by password. Issue id_token.", username.as_str());
 
+  // generate id_token with refresh token
   let Ok(token) = state.crypto.generate_token(&user, &client_id, true) else {
     return Err(GetTokensError::TokenCreationFailed)
   };
@@ -95,18 +93,10 @@ pub async fn get_tokens(
     error!("Failed to retrieve refresh token from token struct");
     return Err(GetTokensError::TokenCreationFailed)
   };
-  if state.refresh_token_table.add_and_prune(&refresh).await.is_err() {
+  if state.table.refresh_token.add_and_prune(&refresh).await.is_err() {
     error!("Failed to store refresh token");
     return Err(GetTokensError::TokenCreationFailed);
   };
-
-  // //test
-  // let refresh_token_string = token.clone().inner.refresh.unwrap();
-  // let res = state
-  //   .refresh_token_table
-  //   .prune_and_find(&refresh_token_string, &client_id)
-  //   .await;
-  // warn!("{:#?}", res);
 
   Ok(Json(TokensResponse {
     token: token.inner,

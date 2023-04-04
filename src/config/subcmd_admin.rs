@@ -1,7 +1,9 @@
 use super::ClapSubCommand;
 use crate::{
   constants::{ADMIN_USERNAME, DB_FILE_PATH},
+  entity::{Password, Username},
   error::*,
+  table::{setup_sqlite, UserSearchKey, UserTable},
 };
 use async_trait::async_trait;
 use clap::{Arg, ArgMatches, Command};
@@ -38,29 +40,15 @@ impl ClapSubCommand for Admin {
       }
     };
 
-    // // Setting up globals
-    // let user_db = UserDB {
-    //   db_file_path,
-    //   allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
-    //   user_table_name: USER_TABLE_NAME.to_string(),
-    //   token_table_name: TOKEN_TABLE_NAME.to_string(),
-    // };
+    let admin_name = Username::new(ADMIN_USERNAME).unwrap();
+    let admin_password = Password::new(sub_m.get_one::<String>("admin_password").unwrap()).unwrap();
 
-    let admin_name = ADMIN_USERNAME;
-    let admin_password = sub_m.get_one::<String>("admin_password");
+    // First setup sqlite if needed
+    let (user_table, _) = setup_sqlite(&format!("sqlite:{}", db_file_path)).await?;
+    let _res = user_table
+      .update_password(UserSearchKey::Username(&admin_name), &admin_password)
+      .await?;
 
-    // match client_ids {
-    //   Some(cids) => user_db.init_db(
-    //     admin_name.as_ref().map(AsRef::as_ref),
-    //     admin_password.as_ref().map(AsRef::as_ref),
-    //     cids.split(',').collect::<Vec<&str>>(),
-    //   )?,
-    //   None => user_db.init_db(
-    //     admin_name.as_ref().map(AsRef::as_ref),
-    //     admin_password.as_ref().map(AsRef::as_ref),
-    //     vec![],
-    //   )?,
-    // };
     Ok(None)
   }
 }

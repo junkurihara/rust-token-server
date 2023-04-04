@@ -26,14 +26,15 @@ impl CryptoState {
     self.keypair.verify_token(token, &self.issuer, &self.audiences)
   }
 }
+pub struct TableState {
+  pub user: SqliteUserTable,
+  pub refresh_token: SqliteRefreshTokenTable,
+}
 
 pub struct AppState {
   pub listen_socket: SocketAddr,
   pub crypto: CryptoState,
-  pub user_table: SqliteUserTable,
-  pub refresh_token_table: SqliteRefreshTokenTable,
+  pub table: TableState,
 }
-
-// TODO: add token table
 
 // client ids = audiences テーブルは持つのをやめた。テーブルに格納する意味はあんまりなさそう。

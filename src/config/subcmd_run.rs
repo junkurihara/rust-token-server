@@ -3,7 +3,7 @@ use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
   error::*,
   jwt::{Algorithm, AlgorithmType, Audiences, Issuer, JwtKeyPair},
-  state::{AppState, CryptoState},
+  state::{AppState, CryptoState, TableState},
   table::setup_sqlite,
 };
 use async_trait::async_trait;
@@ -148,24 +148,10 @@ impl ClapSubCommand for Run {
         issuer,
         audiences,
       },
-      user_table,
-      refresh_token_table,
+      table: TableState {
+        user: user_table,
+        refresh_token: refresh_token_table,
+      },
     }))
-
-    // // Setting up globals
-    // let user_db = UserDB {
-    //   db_file_path,
-    //   user_table_name: USER_TABLE_NAME.to_string(),
-    //   allowed_client_table_name: ALLOWED_CLIENT_TABLE_NAME.to_string(),
-    //   token_table_name: TOKEN_TABLE_NAME.to_string(),
-    // };
-    // user_db.clone().init_db(None, None, vec![])?; // check db if it is already initialized.
-
-    // // read client ids
-    // let ignore_client_id = matches.get_flag("ignore_client_id");
-    // let client_ids = user_db.get_all_allowed_client_ids()?;
-    // if !ignore_client_id {
-    //   info!("allowed_client_ids {:?}", client_ids);
-    // }
   }
 }
