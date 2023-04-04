@@ -1,5 +1,5 @@
 use crate::{
-  entity::{Audiences, ClientId, IsAdmin, RefreshTokenInner, SubscriberId, User, Username},
+  entity::{Audiences, ClientId, IsAdmin, Issuer, RefreshTokenInner, SubscriberId, User, Username},
   error::*,
   log::*,
 };
@@ -17,7 +17,7 @@ pub struct TokenInner {
   pub issued_at: String,
   pub expires: String,
   pub allowed_apps: Audiences, //Vec<String>, // allowed apps, i.e, client_ids
-  pub issuer: String,          // like 'https://....' for IdToken
+  pub issuer: Issuer,          // like 'https://....' for IdToken
   pub subscriber_id: SubscriberId,
 }
 
@@ -27,7 +27,7 @@ impl fmt::Display for TokenInner {
       f,
       "sub: {}, iss: {}, iat: {}, exp: {}, aud: {:?}",
       self.subscriber_id.as_str(),
-      self.issuer,
+      self.issuer.as_str(),
       self.issued_at,
       self.expires,
       self.allowed_apps
@@ -88,7 +88,7 @@ impl TokenInner {
     Ok(Self {
       id: jwt_str,
       refresh,
-      issuer: iss.to_string(),
+      issuer: Issuer::new(iss)?,
       allowed_apps: aud,
       issued_at: issued_at.to_string(),
       expires: expires.to_string(),
@@ -121,7 +121,7 @@ mod tests {
     assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
     assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
     assert_eq!(token_inner.allowed_apps, Audiences::new("client_id").unwrap());
-    assert_eq!(&token_inner.issuer, "issuer");
+    assert_eq!(token_inner.issuer.as_str(), "issuer");
     assert_eq!(
       token_inner.subscriber_id.as_str(),
       "a463e66b-c98a-4820-ad27-f3874fe2f391"
@@ -135,7 +135,7 @@ mod tests {
       token_inner.allowed_apps,
       Audiences::new("client_id".to_string()).unwrap()
     );
-    assert_eq!(&token_inner.issuer, "issuer");
+    assert_eq!(token_inner.issuer.as_str(), "issuer");
     assert_eq!(
       token_inner.subscriber_id.as_str(),
       "a463e66b-c98a-4820-ad27-f3874fe2f391"

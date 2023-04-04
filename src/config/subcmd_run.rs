@@ -1,9 +1,9 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
-  entity::Audiences,
+  entity::{Audiences, Issuer},
   error::*,
-  jwt::{Algorithm, AlgorithmType, Issuer, JwtKeyPair},
+  jwt::{Algorithm, AlgorithmType, JwtKeyPair},
   state::{AppState, CryptoState, TableState},
   table::setup_sqlite,
 };

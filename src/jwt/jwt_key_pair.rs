@@ -1,11 +1,10 @@
 use super::{
   alg::Algorithm,
   token::{Token, TokenInner, TokenMeta},
-  Issuer,
 };
 use crate::{
   constants::*,
-  entity::{Audiences, ClientId, User},
+  entity::{Audiences, ClientId, Issuer, User},
   error::*,
   log::*,
 };
