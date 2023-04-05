@@ -47,7 +47,7 @@ impl ClapSubCommand for Run {
           .short('c')
           .long("client-ids")
           .value_name("IDs")
-          .help("Client ids allowed to connect the API server, split with comma like \"AAAA,BBBBB,CCCC\". If not specified, any client can be connected."),
+          .help("Client ids allowed to connect the API server, split with comma like 'AAAA,BBBBB,CCCC'. If not specified, any client can be connected."),
       )
       .arg(
         Arg::new("signing_key_path")

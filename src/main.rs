@@ -1,52 +1,76 @@
-mod auth;
+mod apis;
+mod argon2;
 mod config;
 mod constants;
-mod db;
+mod entity;
 mod error;
-mod globals;
-mod health_check;
 mod jwt;
-mod request;
-mod request_bearer_token;
-mod response;
-mod rocket_api_create_user;
-mod rocket_api_jwks;
-mod rocket_api_refresh;
-mod rocket_api_token_checkflow;
-mod rocket_api_tokens;
-mod utils;
+mod log;
+mod state;
+mod table;
 
-use error::*;
-use globals::{Globals, Mode};
-use health_check::health;
-use rocket_api_create_user::create_user;
-use rocket_api_jwks::jwks;
-use rocket_api_refresh::refresh;
-use rocket_api_tokens::tokens;
+// use crate::api_create_user::create_user;
+use crate::{
+  apis::{create_user, get_tokens, health_check, jwks, refresh, update_user},
+  constants::*,
+  error::*,
+  log::*,
+  state::AppState,
+};
+use axum::{
+  routing::{get, post},
+  Router, Server,
+};
+use config::parse_opts;
+use std::sync::Arc;
+use tokio::runtime::Builder;
 
-#[macro_use]
-extern crate rocket;
+fn main() -> Result<()> {
+  init_logger();
 
-#[rocket::main]
-async fn main() -> Result<(), Error> {
-  env_logger::init();
+  let mut runtime_builder = Builder::new_multi_thread();
+  runtime_builder.enable_all();
+  runtime_builder.thread_name(THREAD_NAME);
+  let runtime = runtime_builder.build()?;
 
-  let (mode, globals_opt) = config::parse_opts()?;
-  match mode {
-    Mode::Run => {
-      if let Some(globals) = globals_opt {
-        let _ = rocket::build()
-          .mount("/health", routes![health])
-          .mount("/v1.0", routes![tokens, create_user, refresh, jwks])
-          .manage(globals)
-          .launch()
-          .await?;
-
-        Ok(())
-      } else {
-        bail!("Failed to run");
+  runtime.block_on(async {
+    match parse_opts().await {
+      Ok(Some(shared_state)) => {
+        define_route(Arc::new(shared_state)).await;
       }
-    }
-    _ => Ok(()),
+      Ok(None) => {
+        // TODO:
+        warn!("something init maybe admin password update");
+      }
+      Err(e) => {
+        error!("{e}");
+      }
+    };
+  });
+
+  Ok(())
+}
+
+async fn define_route(shared_state: Arc<AppState>) {
+  let addr = shared_state.listen_socket;
+  info!("Listening on {}", &addr);
+
+  // routes nested under /v1.0
+  let api_routes = Router::new()
+    .route("/jwks", get(jwks))
+    .route("/tokens", post(get_tokens))
+    .route("/refresh", post(refresh))
+    .route("/create_user", post(create_user))
+    .route("/update_user", post(update_user))
+    .with_state(shared_state);
+
+  let router = Router::new()
+    .route("/health", get(health_check))
+    .nest("/v1.0", api_routes);
+
+  let server = Server::bind(&addr).serve(router.into_make_service());
+
+  if let Err(e) = server.await {
+    error!("Server is down!: {e}");
   }
 }

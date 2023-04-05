@@ -55,31 +55,33 @@ echo "Start ID Token Server"
 # read custom configuration
 source /opt/token-server/etc/.env
 
-# debug level logging
-LOG_LEVEL=info
-if [ ${DEBUG} ]; then
-  echo "Logging in debug mode"
-  LOG_LEVEL=debug
+if [ -z $LOG_LEVEL ]; then
+  LOG_LEVEL=info
 fi
-
-# read custom configuration
-source /opt/token-server/etc/.env
-
-echo "Init first"
-RUST_LOG=${LOG_LEVEL} /opt/token-server/sbin/rust-token-server init \
-  --admin-name ${ADMIN_NAME} \
-  --admin-password ${ADMIN_PASSWORD} \
-  --db-file-path /opt/token-server/var/userdb.db \
-  --client-ids ${CLIENT_IDS}
+echo "Log level is ${LOG_LEVEL}"
 
 echo "Run the server"
-RUST_LOG=${LOG_LEVEL} \
-ROCKET_ENV=development \
-ROCKET_ADDRESS="0.0.0.0" \
-ROCKET_PORT=8000 \
-/opt/token-server/sbin/rust-token-server run \
+if [ -n $ADMIN_PASSWORD ]; then
+  ADMIN_PASSWORD=${ADMIN_PASSWORD} \
+  RUST_LOG=${LOG_LEVEL} \
+  /opt/token-server/sbin/rust-token-server run \
   --signing-algorithm ${SIGNING_ALGORITHM} \
   --signing-key-path /opt/token-server/etc/private_key.pem \
   --db-file-path /opt/token-server/var/userdb.db \
   --token-issuer ${TOKEN_ISSUER} \
-  --with-key-id
+  --client-ids ${CLIENT_IDS} \
+  --with-key-id \
+  --listen-address 0.0.0.0 \
+  --port=8000
+else
+  RUST_LOG=${LOG_LEVEL} \
+  /opt/token-server/sbin/rust-token-server run \
+  --signing-algorithm ${SIGNING_ALGORITHM} \
+  --signing-key-path /opt/token-server/etc/private_key.pem \
+  --db-file-path /opt/token-server/var/userdb.db \
+  --token-issuer ${TOKEN_ISSUER} \
+  --client-ids ${CLIENT_IDS} \
+  --with-key-id \
+  --listen-address 0.0.0.0 \
+  --port=8000
+fi

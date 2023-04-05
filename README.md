@@ -1,3 +1,5 @@
+> **The architecture and framework is being totally changed from rocket+rusqlite to axum+sqlx with additional api changes without losing compatibility.** This document will be written soon.
+
 # rust-token-server
 
 REST API server to handle JSON Web Token, written in Rust
