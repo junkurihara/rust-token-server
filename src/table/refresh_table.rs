@@ -97,7 +97,7 @@ impl TryInto<RefreshToken> for RefreshTokenRow {
     let res = RefreshToken {
       subscriber_id: SubscriberId::new(self.subscriber_id)?,
       client_id: ClientId::new(self.client_id)?,
-      inner: RefreshTokenInner::try_from(self.inner.as_str())?,
+      inner: RefreshTokenInner::new(self.inner.as_str())?,
       expires,
     };
     Ok(res)

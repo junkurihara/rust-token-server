@@ -1,7 +1,7 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
-  entity::{Audiences, Issuer},
+  entity::*,
   error::*,
   jwt::{Algorithm, AlgorithmType, JwtKeyPair},
   state::{AppState, CryptoState, TableState},

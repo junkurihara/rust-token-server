@@ -8,19 +8,22 @@ use std::borrow::Cow;
 use validator::Validate;
 
 #[derive(Debug, Clone, Eq, PartialEq, Validate)]
-pub struct Username {
+pub struct IdToken {
   #[validate(length(min = 1))]
   value: String,
 }
-impl<'a, T: Into<Cow<'a, str>>> TryNewEntity<T> for Username {
-  fn new(username: T) -> Result<Self> {
-    let value = username.into().to_string();
+impl<'a, T> TryNewEntity<T> for IdToken
+where
+  T: Into<Cow<'a, str>>,
+{
+  fn new(id_token_str: T) -> Result<Self> {
+    let value = id_token_str.into().to_string();
     let object = Self { value };
     object.validate()?;
     Ok(object)
   }
 }
-impl Entity for Username {
+impl Entity for IdToken {
   fn as_str(&self) -> &str {
     &self.value
   }
@@ -28,7 +31,7 @@ impl Entity for Username {
     self.value
   }
 }
-impl Serialize for Username {
+impl Serialize for IdToken {
   fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -36,16 +39,16 @@ impl Serialize for Username {
     serializer.serialize_str(self.as_str())
   }
 }
-impl<'de> Deserialize<'de> for Username {
+impl<'de> Deserialize<'de> for IdToken {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
   {
-    struct UsernameVisitor;
-    impl<'de> Visitor<'de> for UsernameVisitor {
+    struct IdTokenVisitor;
+    impl<'de> Visitor<'de> for IdTokenVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("username string")
+        formatter.write_str("id_token jwt string")
       }
       fn visit_str<E>(self, str: &str) -> Result<Self::Value, E>
       where
@@ -55,7 +58,7 @@ impl<'de> Deserialize<'de> for Username {
       }
     }
 
-    let value = deserializer.deserialize_str(UsernameVisitor)?;
+    let value = deserializer.deserialize_str(IdTokenVisitor)?;
 
     Ok(Self { value })
   }

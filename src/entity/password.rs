@@ -1,4 +1,4 @@
-use super::EncodedHash;
+use super::{EncodedHash, Entity, TryNewEntity};
 use crate::{argon2::*, error::*};
 use serde::{
   de::{self, Visitor},
@@ -12,20 +12,23 @@ pub struct Password {
   #[validate(length(min = 1))]
   value: String,
 }
-impl Password {
-  pub fn new<'a>(password: impl Into<Cow<'a, str>>) -> Result<Self> {
+impl<'a, T: Into<Cow<'a, str>>> TryNewEntity<T> for Password {
+  fn new(password: T) -> Result<Self> {
     let value = password.into().to_string();
     let object = Self { value };
     object.validate()?;
     Ok(object)
   }
-  pub fn as_str(&self) -> &str {
+}
+impl Entity for Password {
+  fn as_str(&self) -> &str {
     &self.value
   }
-  #[allow(dead_code)]
-  pub fn into_string(self) -> String {
+  fn into_string(self) -> String {
     self.value
   }
+}
+impl Password {
   pub fn hash(&self) -> Result<String> {
     generate_argon2(self.as_str())
   }
@@ -33,6 +36,7 @@ impl Password {
     verify_argon2(self.as_str(), encoded_hash.as_str())
   }
 }
+
 impl<'de> Deserialize<'de> for Password {
   fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
   where

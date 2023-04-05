@@ -1,4 +1,4 @@
-use super::{Password, Username};
+use super::{EncodedHash, Entity, Password, SubscriberId, TryNewEntity, Username};
 use crate::{
   constants::{ADMIN_USERNAME, PASSWORD_LEN},
   error::*,
@@ -6,73 +6,19 @@ use crate::{
 };
 use rand::prelude::*;
 use serde::Serialize;
-use std::borrow::Cow;
 use uuid::Uuid;
-use validator::Validate;
-
-#[derive(Debug, Clone, Validate)]
-pub struct SubscriberId {
-  #[validate(length(min = 1))]
-  value: String,
-}
-impl SubscriberId {
-  pub fn new<'a>(sub_id: impl Into<Cow<'a, str>>) -> Result<Self> {
-    let value = sub_id.into().to_string();
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn as_str(&self) -> &str {
-    &self.value
-  }
-  pub fn into_string(self) -> String {
-    self.value
-  }
-}
-impl Serialize for SubscriberId {
-  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    serializer.serialize_str(self.as_str())
-  }
-}
-
-#[derive(Debug, Clone, Validate)]
-pub struct EncodedHash {
-  #[validate(length(min = 1))]
-  value: String,
-}
-impl EncodedHash {
-  pub fn new(password: &Password) -> Result<Self> {
-    let value = password.hash()?;
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn new_from_raw<'a>(encoded_hash: impl Into<Cow<'a, str>>) -> Result<Self> {
-    let value = encoded_hash.into().to_string();
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn as_str(&self) -> &str {
-    &self.value
-  }
-  pub fn into_string(self) -> String {
-    self.value
-  }
-}
 
 #[derive(Debug, Clone)]
 pub struct IsAdmin {
   value: bool,
 }
-impl IsAdmin {
-  pub fn new(is_admin: bool) -> Result<Self> {
+impl TryNewEntity<bool> for IsAdmin {
+  fn new(is_admin: bool) -> Result<Self> {
     let object = Self { value: is_admin };
     Ok(object)
   }
+}
+impl IsAdmin {
   pub fn into_string(self) -> String {
     self.value.to_string()
   }
@@ -115,10 +61,8 @@ Password was automatically generated for the user of name "{}". Keep this secure
       );
       Password::new(random_pass)?
     };
-    let subscriber_id = SubscriberId {
-      value: Uuid::new_v4().to_string(),
-    };
-    let encoded_hash = EncodedHash::new(&password_unwrapped)?;
+    let subscriber_id = SubscriberId::new(Uuid::new_v4().to_string())?;
+    let encoded_hash = EncodedHash::generate(&password_unwrapped)?;
     let is_admin = if username.as_str() == ADMIN_USERNAME {
       IsAdmin::new(true)
     } else {

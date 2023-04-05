@@ -7,22 +7,32 @@ use serde::{
 use std::{borrow::Cow, collections::HashSet, convert::From};
 use validator::Validate;
 
+use super::{Entity, TryNewEntity};
+
 #[derive(Debug, Clone, Eq, PartialEq, Validate, Hash)]
+/// Client ID meaning an identifier of client application allowed
+/// to connect the token server.
 pub struct ClientId {
   #[validate(length(min = 1))]
   value: String,
 }
-impl ClientId {
-  pub fn new<'a>(client_id: impl Into<Cow<'a, str>>) -> Result<Self> {
+impl<'a, T> TryNewEntity<T> for ClientId
+where
+  T: Into<Cow<'a, str>>,
+{
+  /// Instantiate ClientId instance
+  fn new(client_id: T) -> Result<Self> {
     let value = client_id.into().to_string();
     let object = Self { value };
     object.validate()?;
     Ok(object)
   }
-  pub fn as_str(&self) -> &str {
+}
+impl Entity for ClientId {
+  fn as_str(&self) -> &str {
     &self.value
   }
-  pub fn into_string(self) -> String {
+  fn into_string(self) -> String {
     self.value
   }
 }
@@ -61,11 +71,21 @@ impl<'de> Deserialize<'de> for ClientId {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A set of [`ClientId`], i.e., client apps allowed to connect the server.
+/// [`Audiences`] is simply a term of [ID Token] of OpenID Connect:
+/// > Audience(s) that this ID Token is intended for.
+///
+/// [ID Token]: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 pub struct Audiences {
   value: HashSet<ClientId>,
 }
-impl Audiences {
-  pub fn new<'a>(client_ids: impl Into<Cow<'a, str>>) -> Result<Self> {
+impl<'a, T> TryNewEntity<T> for Audiences
+where
+  T: Into<Cow<'a, str>>,
+{
+  /// Instantiate new Audiences from client_id string separated by comma, e.g.,
+  /// `xxxx,yyyy,zzzz`.
+  fn new(client_ids: T) -> Result<Self> {
     let s: String = client_ids.into().to_string();
     let value = s
       .split(',')
@@ -75,6 +95,8 @@ impl Audiences {
     let object = Self { value };
     Ok(object)
   }
+}
+impl Audiences {
   pub fn into_string_hashset(self) -> HashSet<String> {
     self
       .value

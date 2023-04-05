@@ -3,7 +3,7 @@ mod user_table;
 
 use crate::{
   constants::{ADMIN_PASSWORD_VAR, ADMIN_USERNAME},
-  entity::{ClientId, Password, RefreshToken, RefreshTokenInner, SubscriberId, User, Username},
+  entity::*,
   error::*,
   log::*,
 };

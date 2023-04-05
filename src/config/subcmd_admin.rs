@@ -1,7 +1,7 @@
 use super::ClapSubCommand;
 use crate::{
   constants::{ADMIN_USERNAME, DB_FILE_PATH},
-  entity::{Password, Username},
+  entity::{Password, TryNewEntity, Username},
   error::*,
   table::{setup_sqlite, UserSearchKey, UserTable},
 };

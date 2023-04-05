@@ -34,7 +34,7 @@ impl UserTable for SqliteUserTable {
   }
 
   async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()> {
-    let encoded_hash = EncodedHash::new(new_password)?;
+    let encoded_hash = EncodedHash::generate(new_password)?;
     let sql = match user_search_key {
       UserSearchKey::SubscriberId(sub_id) => format!(
         "update {} set encoded_hash=\"{}\" where subscriber_id=\"{}\"",
@@ -104,7 +104,7 @@ impl TryInto<User> for UserRow {
     let x = User {
       username: Username::new(self.username)?,
       subscriber_id: SubscriberId::new(self.subscriber_id)?,
-      encoded_hash: EncodedHash::new_from_raw(self.encoded_hash)?,
+      encoded_hash: EncodedHash::new(self.encoded_hash)?,
       is_admin: IsAdmin::new(self.is_admin.parse::<bool>()?)?,
     };
     x.username.validate()?;

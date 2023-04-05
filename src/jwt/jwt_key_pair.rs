@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
   constants::*,
-  entity::{Audiences, ClientId, Issuer, User},
+  entity::{self, *},
   error::*,
   log::*,
 };
@@ -91,7 +91,7 @@ impl JwtKeyPair {
     let addition = AdditionalClaimData {
       is_admin: user.is_admin(),
     };
-    let audiences = Audiences::new(client_id.as_str())?.into_string_hashset();
+    let audiences = entity::Audiences::new(client_id.as_str())?.into_string_hashset();
     let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
       .with_subject(user.subscriber_id())
       .with_issuer(token_issuer.as_str())
@@ -109,7 +109,7 @@ impl JwtKeyPair {
     &self,
     token: &str,
     token_issuer: &Issuer,
-    allowed_audiences: &Option<Audiences>,
+    allowed_audiences: &Option<entity::Audiences>,
   ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = allowed_audiences {
@@ -167,7 +167,7 @@ mod tests {
       assert!(token.is_ok());
 
       let id_token = token.unwrap().inner.id;
-      let validation_result = signing_key.verify_token(&id_token, &token_issuer, &None);
+      let validation_result = signing_key.verify_token(id_token.as_str(), &token_issuer, &None);
       assert!(validation_result.is_ok());
     }
   }

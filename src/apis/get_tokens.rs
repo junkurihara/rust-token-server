@@ -1,7 +1,7 @@
 use super::{request::TokensRequest, response::TokensResponse};
 use crate::{
   constants::DEFAUTL_CLIENT_ID,
-  entity::{ClientId, RefreshToken},
+  entity::{ClientId, Entity, RefreshToken, TryNewEntity},
   log::*,
   state::AppState,
   table::{UserSearchKey, UserTable},

@@ -1,4 +1,4 @@
-use super::{ClientId, SubscriberId};
+use super::{ClientId, Entity, SubscriberId, TryNewEntity};
 use crate::{
   constants::{REFRESH_TOKEN_DURATION_MINS, REFRESH_TOKEN_LEN},
   error::*,
@@ -10,7 +10,7 @@ use serde::{
   de::{self, Visitor},
   Deserialize, Serialize,
 };
-use std::convert::TryFrom;
+use std::{borrow::Cow, convert::TryFrom};
 use validator::Validate;
 
 #[derive(sqlx::FromRow, Debug, Clone)]
@@ -52,29 +52,33 @@ pub struct RefreshTokenInner {
   #[validate(length(equal = "REFRESH_TOKEN_LEN"))]
   value: String,
 }
+impl<'a, T> TryNewEntity<T> for RefreshTokenInner
+where
+  T: Into<Cow<'a, str>>,
+{
+  fn new(value: T) -> Result<Self> {
+    let value = value.into().to_string();
+    let object = Self { value };
+    object.validate()?;
+    Ok(object)
+  }
+}
+impl Entity for RefreshTokenInner {
+  // impl Entity for RefreshTokenInner {
+  fn as_str(&self) -> &str {
+    &self.value
+  }
+  fn into_string(self) -> String {
+    self.value
+  }
+}
 impl RefreshTokenInner {
-  pub fn new() -> Result<Self> {
+  pub fn generate() -> Result<Self> {
     let value: String = thread_rng()
       .sample_iter(&Alphanumeric)
       .take(REFRESH_TOKEN_LEN)
       .map(char::from)
       .collect();
-    let object = Self { value };
-    object.validate()?;
-    Ok(object)
-  }
-  pub fn as_str(&self) -> &str {
-    &self.value
-  }
-  pub fn into_string(self) -> String {
-    self.value
-  }
-}
-impl<'a> TryFrom<&'a str> for RefreshTokenInner {
-  type Error = crate::error::Error;
-
-  fn try_from(value: &'a str) -> std::result::Result<Self, Self::Error> {
-    let value = value.to_string();
     let object = Self { value };
     object.validate()?;
     Ok(object)
