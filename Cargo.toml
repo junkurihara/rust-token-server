@@ -17,11 +17,7 @@ anyhow = "1.0.70"
 axum = { version = "0.6.12", features = ["headers"] }
 base64 = "0.21.0"
 chrono = "0.4.24"
-clap = { version = "4.2.1", default-features = false, features = [
-  "std",
-  "cargo",
-  "wrap_help",
-] }
+clap = { version = "4.2.1", features = ["std", "cargo", "wrap_help"] }
 jwt-simple = "0.11.4"
 rand = "0.8.5"
 serde = { version = "1.0.159", features = ["derive"] }

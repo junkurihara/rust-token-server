@@ -14,6 +14,7 @@ pub(super) struct Admin {}
 impl ClapSubCommand for Admin {
   fn subcmd() -> Command {
     Command::new("admin")
+      .about("Admin command to update admin password")
       .arg(
         Arg::new("admin_password")
           .short('p')

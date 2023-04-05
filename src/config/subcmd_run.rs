@@ -16,7 +16,7 @@ pub(super) struct Run {}
 #[async_trait]
 impl ClapSubCommand for Run {
   fn subcmd() -> Command {
-    Command::new("run")
+    Command::new("run").about("Run the authentication and token server")
       .arg(
         Arg::new("listen_address")
           .short('l')
