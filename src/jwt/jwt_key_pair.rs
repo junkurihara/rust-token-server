@@ -155,8 +155,8 @@ mod tests {
     assert!(user.is_ok());
     let user = user.unwrap();
 
-    let client_id = ClientId::new("client_id").expect("ClientId creation failed");
-    let token_issuer = Issuer::new("issuer").expect("Issuer creation failed");
+    let client_id = ClientId::new("client_id1").expect("ClientId creation failed");
+    let token_issuer = Issuer::new("https://auth.example.com/v1.0").expect("Issuer creation failed");
     let refresh_required = true;
 
     let keys = [P256_PRIVATE_KEY, EDDSA_PRIVATE_KEY];

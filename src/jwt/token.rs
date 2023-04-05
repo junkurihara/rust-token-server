@@ -117,31 +117,31 @@ mod tests {
 
   #[test]
   fn test_token_inner() {
-    let test_vector = IdToken::new("eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2ODAyNjIxNTgsImV4cCI6MTY4MDI2Mzk1OCwibmJmIjoxNjgwMjYyMTU4LCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJhNDYzZTY2Yi1jOThhLTQ4MjAtYWQyNy1mMzg3NGZlMmYzOTEiLCJhdWQiOlsiY2xpZW50X2lkIl0sImlzX2FkbWluIjpmYWxzZX0.tkR9CdX0sMRuI7jS_VGRs9Lojn7Xbuv1YXgnp0QkgiP1vMDo9xKPz7b5VmpaMI0Jg9muazdBbzZxhabJC9qiCA").unwrap();
+    let test_vector = IdToken::new("eyJhbGciOiJFZERTQSIsImtpZCI6ImdqckU3QUNNeGd6WWZGSGdhYmdmNGtMVGcxZUtJZHNKOTRBaUZURmoxaXMiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2ODA3MDM2MzAsImV4cCI6MTY4MDcwNTQzMCwibmJmIjoxNjgwNzAzNjMwLCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20vdjEuMCIsInN1YiI6IjY5ZjUwZmZiLTM1NTYtNDQ2ZS05YTMwLWFmODZhMmE2NjAwNyIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.afZPBq5405DUehIPP6EG2psDPOMngOuZzT-ySPraJFTTJT0TDoaa3hzAS_Ug_UXSPsxYGmZnrVBBgA4TEfTHCQ").unwrap();
 
     let token_inner = TokenInner::new(&test_vector, true).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_some());
-    assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
-    assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
-    assert_eq!(token_inner.allowed_apps, Audiences::new("client_id").unwrap());
-    assert_eq!(token_inner.issuer.as_str(), "issuer");
+    assert_eq!(&token_inner.issued_at, "2023-04-05 23:07:10 +09:00");
+    assert_eq!(&token_inner.expires, "2023-04-05 23:37:10 +09:00");
+    assert_eq!(token_inner.allowed_apps, Audiences::new("client_id1").unwrap());
+    assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
     assert_eq!(
       token_inner.subscriber_id.as_str(),
-      "a463e66b-c98a-4820-ad27-f3874fe2f391"
+      "69f50ffb-3556-446e-9a30-af86a2a66007"
     );
 
     let token_inner = TokenInner::new(&test_vector, false).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_none());
-    assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
-    assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
+    assert_eq!(&token_inner.issued_at, "2023-04-05 23:07:10 +09:00");
+    assert_eq!(&token_inner.expires, "2023-04-05 23:37:10 +09:00");
     assert_eq!(
       token_inner.allowed_apps,
-      Audiences::new("client_id".to_string()).unwrap()
+      Audiences::new("client_id1".to_string()).unwrap()
     );
-    assert_eq!(token_inner.issuer.as_str(), "issuer");
+    assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
     assert_eq!(
       token_inner.subscriber_id.as_str(),
-      "a463e66b-c98a-4820-ad27-f3874fe2f391"
+      "69f50ffb-3556-446e-9a30-af86a2a66007"
     );
   }
   #[test]
