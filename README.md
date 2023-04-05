@@ -1,4 +1,4 @@
-> **The architecture and framework is being totally changed from rocket+rusqlite to axum+sqlx with additional api changes without losing compatibility.** This document will be written soon.
+> **The architecture and framework is being totally changed from rocket+rusqlite to axum+sqlx with additional api changes with losing some compatibility.** This document will be written soon.
 
 # rust-token-server
 

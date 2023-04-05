@@ -1,6 +1,6 @@
 use crate::{entity::*, error::*, log::*};
 use base64::Engine;
-use chrono::{DateTime, Local, TimeZone};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt;
@@ -78,8 +78,8 @@ impl TokenInner {
     } else {
       Audiences::new("")?
     };
-    let issued_at: DateTime<Local> = Local.timestamp_opt(iat, 0).unwrap();
-    let expires: DateTime<Local> = Local.timestamp_opt(exp, 0).unwrap();
+    let issued_at: DateTime<Utc> = Utc.timestamp_opt(iat, 0).unwrap();
+    let expires: DateTime<Utc> = Utc.timestamp_opt(exp, 0).unwrap();
 
     let refresh: Option<RefreshTokenInner> = if refresh_required {
       debug!("[{subscriber_id}] Create refresh token");
@@ -121,8 +121,8 @@ mod tests {
 
     let token_inner = TokenInner::new(&test_vector, true).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_some());
-    assert_eq!(&token_inner.issued_at, "2023-04-05 23:07:10 +09:00");
-    assert_eq!(&token_inner.expires, "2023-04-05 23:37:10 +09:00");
+    assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
+    assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
     assert_eq!(token_inner.allowed_apps, Audiences::new("client_id1").unwrap());
     assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
     assert_eq!(
@@ -132,8 +132,8 @@ mod tests {
 
     let token_inner = TokenInner::new(&test_vector, false).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_none());
-    assert_eq!(&token_inner.issued_at, "2023-04-05 23:07:10 +09:00");
-    assert_eq!(&token_inner.expires, "2023-04-05 23:37:10 +09:00");
+    assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
+    assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
     assert_eq!(
       token_inner.allowed_apps,
       Audiences::new("client_id1".to_string()).unwrap()
