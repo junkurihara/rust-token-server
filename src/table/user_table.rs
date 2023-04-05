@@ -33,6 +33,46 @@ impl UserTable for SqliteUserTable {
     Ok(())
   }
 
+  async fn update_user<'a>(
+    &self,
+    subscriber_id: &SubscriberId,
+    new_username: Option<&Username>,
+    new_password: Option<&Password>,
+  ) -> Result<()> {
+    let sql = match (new_username, new_password) {
+      (Some(username), None) => format!(
+        "update {} set username=\"{}\" where subscriber_id=\"{}\"",
+        USER_TABLE_NAME,
+        username.as_str(),
+        subscriber_id.as_str()
+      ),
+      (None, Some(password)) => {
+        let encoded_hash = EncodedHash::generate(password)?;
+        format!(
+          "update {} set encoded_hash=\"{}\" where subscriber_id=\"{}\"",
+          USER_TABLE_NAME,
+          encoded_hash.as_str(),
+          subscriber_id.as_str()
+        )
+      }
+      (Some(username), Some(password)) => {
+        let encoded_hash = EncodedHash::generate(password)?;
+        format!(
+          "update {} set username=\"{}\", encoded_hash=\"{}\" where subscriber_id=\"{}\"",
+          USER_TABLE_NAME,
+          username.as_str(),
+          encoded_hash.as_str(),
+          subscriber_id.as_str()
+        )
+      }
+      (None, None) => {
+        bail!("Both or either one of username and password must be specified");
+      }
+    };
+    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    Ok(())
+  }
+
   async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()> {
     let encoded_hash = EncodedHash::generate(new_password)?;
     let sql = match user_search_key {

@@ -76,6 +76,7 @@ Password was automatically generated for the user of name "{}". Keep this secure
     })
   }
 
+  #[allow(dead_code)]
   pub fn encoded_hash(&self) -> &str {
     self.encoded_hash.as_str()
   }

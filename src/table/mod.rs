@@ -23,6 +23,12 @@ pub enum UserSearchKey<'a> {
 pub trait UserTable {
   async fn add(&self, user: User) -> Result<()>;
   async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()>;
+  async fn update_user<'a>(
+    &self,
+    subscriber_id: &SubscriberId,
+    new_username: Option<&Username>,
+    new_password: Option<&Password>,
+  ) -> Result<()>;
   async fn find_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<Option<User>>;
 }
 

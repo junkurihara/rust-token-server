@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use jwt_simple::prelude::JWTClaims;
 
 use crate::{
-  entity::{Audiences, ClientId, Issuer, User},
+  entity::{Audiences, ClientId, IdToken, Issuer, User},
   error::*,
   jwt::{AdditionalClaimData, Algorithm, JwtKeyPair, Token},
   table::{SqliteRefreshTokenTable, SqliteUserTable},
@@ -22,8 +22,8 @@ impl CryptoState {
       .keypair
       .generate_token(user, client_id, &self.issuer, refresh_required)
   }
-  pub fn verify_token(&self, token: &str) -> Result<JWTClaims<AdditionalClaimData>> {
-    self.keypair.verify_token(token, &self.issuer, &self.audiences)
+  pub fn verify_token(&self, id_token: &IdToken) -> Result<JWTClaims<AdditionalClaimData>> {
+    self.keypair.verify_token(id_token, &self.issuer, &self.audiences)
   }
 }
 pub struct TableState {

@@ -7,3 +7,7 @@ pub struct TokensResponse {
   pub metadata: TokenMeta,
   pub message: String,
 }
+#[derive(Serialize, Debug, Clone)]
+pub struct MessageResponse {
+  pub message: String,
+}

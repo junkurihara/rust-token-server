@@ -51,9 +51,9 @@ pub struct Token {
 }
 
 impl TokenInner {
-  pub(super) fn new(jwt_str: String, refresh_required: bool) -> Result<Self> {
+  pub(super) fn new(id_token: &IdToken, refresh_required: bool) -> Result<Self> {
     // get token info
-    let parsed: Vec<&str> = jwt_str.split('.').collect();
+    let parsed: Vec<&str> = id_token.as_str().split('.').collect();
     let decoded_claims =
       base64::engine::GeneralPurpose::new(&base64::alphabet::URL_SAFE, base64::engine::general_purpose::NO_PAD)
         .decode(parsed[1])?;
@@ -89,7 +89,7 @@ impl TokenInner {
     };
 
     Ok(Self {
-      id: IdToken::new(jwt_str)?,
+      id: id_token.to_owned(),
       refresh,
       issuer: Issuer::new(iss)?,
       allowed_apps: aud,
@@ -117,9 +117,9 @@ mod tests {
 
   #[test]
   fn test_token_inner() {
-    let test_vector = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2ODAyNjIxNTgsImV4cCI6MTY4MDI2Mzk1OCwibmJmIjoxNjgwMjYyMTU4LCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJhNDYzZTY2Yi1jOThhLTQ4MjAtYWQyNy1mMzg3NGZlMmYzOTEiLCJhdWQiOlsiY2xpZW50X2lkIl0sImlzX2FkbWluIjpmYWxzZX0.tkR9CdX0sMRuI7jS_VGRs9Lojn7Xbuv1YXgnp0QkgiP1vMDo9xKPz7b5VmpaMI0Jg9muazdBbzZxhabJC9qiCA";
+    let test_vector = IdToken::new("eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2ODAyNjIxNTgsImV4cCI6MTY4MDI2Mzk1OCwibmJmIjoxNjgwMjYyMTU4LCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJhNDYzZTY2Yi1jOThhLTQ4MjAtYWQyNy1mMzg3NGZlMmYzOTEiLCJhdWQiOlsiY2xpZW50X2lkIl0sImlzX2FkbWluIjpmYWxzZX0.tkR9CdX0sMRuI7jS_VGRs9Lojn7Xbuv1YXgnp0QkgiP1vMDo9xKPz7b5VmpaMI0Jg9muazdBbzZxhabJC9qiCA").unwrap();
 
-    let token_inner = TokenInner::new(test_vector.to_string(), true).expect("Token inner is invalid");
+    let token_inner = TokenInner::new(&test_vector, true).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_some());
     assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
     assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");
@@ -130,7 +130,7 @@ mod tests {
       "a463e66b-c98a-4820-ad27-f3874fe2f391"
     );
 
-    let token_inner = TokenInner::new(test_vector.to_string(), false).expect("Token inner is invalid");
+    let token_inner = TokenInner::new(&test_vector, false).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_none());
     assert_eq!(&token_inner.issued_at, "2023-03-31 20:29:18 +09:00");
     assert_eq!(&token_inner.expires, "2023-03-31 20:59:18 +09:00");

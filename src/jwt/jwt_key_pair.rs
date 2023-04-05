@@ -96,8 +96,8 @@ impl JwtKeyPair {
       .with_subject(user.subscriber_id())
       .with_issuer(token_issuer.as_str())
       .with_audiences(audiences);
-    let jwt_str = self.generate_jwt_string(claims)?;
-    let inner = TokenInner::new(jwt_str, refresh_required)?;
+    let id_token = IdToken::new(self.generate_jwt_string(claims)?)?;
+    let inner = TokenInner::new(&id_token, refresh_required)?;
     let meta = TokenMeta::new(user);
     info!("[{}] Issued a JWT: {}", user.username(), inner);
 
@@ -107,7 +107,7 @@ impl JwtKeyPair {
   /// common operations for JWT verification
   pub fn verify_token(
     &self,
-    token: &str,
+    token: &IdToken,
     token_issuer: &Issuer,
     allowed_audiences: &Option<entity::Audiences>,
   ) -> Result<JWTClaims<AdditionalClaimData>> {
@@ -116,7 +116,7 @@ impl JwtKeyPair {
       options.allowed_audiences = Some(allowed.clone().into_string_hashset());
     }
     options.allowed_issuers = Some(HashSet::from_strings(&[token_issuer.as_str()]));
-    self.verify_token_string(token, options)
+    self.verify_token_string(token.as_str(), options)
   }
 
   /// Key-Type specific operations for JWT verification
@@ -167,7 +167,7 @@ mod tests {
       assert!(token.is_ok());
 
       let id_token = token.unwrap().inner.id;
-      let validation_result = signing_key.verify_token(id_token.as_str(), &token_issuer, &None);
+      let validation_result = signing_key.verify_token(&id_token, &token_issuer, &None);
       assert!(validation_result.is_ok());
     }
   }

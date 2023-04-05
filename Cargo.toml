@@ -15,7 +15,7 @@ keywords = []
 
 [dependencies]
 anyhow = "1.0.70"
-axum = "0.6.12"
+axum = { version = "0.6.12", features = ["headers"] }
 base64 = "0.21.0"
 chrono = "0.4.24"
 clap = { version = "4.1.14", default-features = false, features = [
