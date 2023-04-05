@@ -18,3 +18,21 @@ pub fn verify_argon2(password: &str, encoded_hash: &str) -> Result<bool> {
 
   Ok(matches)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  #[test]
+  fn argon2_works() {
+    let password = "password";
+    let hash = generate_argon2(password);
+    assert!(hash.is_ok());
+    let hash = hash.unwrap();
+    assert_eq!(hash.len(), 117);
+    assert!(hash.starts_with("$argon2id$v=19$m=4096,t=3,p=4$"));
+
+    let verify = verify_argon2(password, &hash);
+    assert!(verify.is_ok());
+    assert!(verify.unwrap());
+  }
+}
