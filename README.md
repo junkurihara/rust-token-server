@@ -1,5 +1,12 @@
 # rust-token-server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Unit Test](https://github.com/junkurihara/rust-token-server/actions/workflows/ci.yml/badge.svg)
+![Build and Publish Docker](https://github.com/junkurihara/rust-token-server/actions/workflows/docker_build_push.yml/badge.svg)
+![ShiftLeft Scan](https://github.com/junkurihara/rust-token-server/actions/workflows/shiftleft-analysis.yml/badge.svg)
+[![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jqtype/id-token-server)](https://hub.docker.com/r/jqtype/id-token-server)
+
+
 REST API server to handle JSON Web Token, written in Rust
 
 ## Installation and build
