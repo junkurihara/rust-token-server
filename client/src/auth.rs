@@ -8,7 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use chrono::{DateTime, Local};
+use chrono::Local;
 use jwt_simple::prelude::{ES256PublicKey, Ed25519PublicKey, JWTClaims, NoCustomClaims};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use serde::{de::DeserializeOwned, Serialize};
@@ -93,7 +93,7 @@ where
     id_token_lock.replace(res_token.token);
     drop(id_token_lock);
 
-    info!("Token retrieved");
+    info!("Token retrieved via login process");
 
     // update validation key
     self.update_validation_key().await?;
@@ -104,6 +104,56 @@ where
     };
 
     info!("Login success!");
+    Ok(())
+  }
+
+  /// refresh id token using refresh token. fails if refresh token is expired (not explicitly specified in token)
+  pub async fn refresh(&self) -> Result<()> {
+    let refresh_token_lock = self.refresh_token.read().await;
+    let Some(refresh_token) = refresh_token_lock.as_ref() else {
+      bail!(AuthError::NoRefreshToken);
+    };
+    let refresh_token = refresh_token.clone();
+    drop(refresh_token_lock);
+
+    let mut refresh_endpoint = self.config.token_api.clone();
+    refresh_endpoint
+      .path_segments_mut()
+      .map_err(|_| AuthError::UrlError)?
+      .push(ENDPOINT_REFRESH_PATH);
+
+    let json_request = RefreshRequest {
+      refresh_token: refresh_token.clone(),
+      client_id: Some(self.config.client_id.clone()),
+    };
+
+    let client_lock = self.http_client.read().await;
+    let refresh_res = client_lock
+      .post_json::<_, AuthenticationResponse>(&refresh_endpoint, &json_request)
+      .await?;
+    drop(client_lock);
+
+    if refresh_res.token.refresh.is_some() {
+      let mut refresh_token_lock = self.refresh_token.write().await;
+      refresh_token_lock.replace(refresh_res.token.refresh.clone().unwrap());
+      drop(refresh_token_lock);
+    }
+
+    let mut id_token_lock = self.id_token.write().await;
+    id_token_lock.replace(refresh_res.token);
+    drop(id_token_lock);
+
+    debug!("Token retrieved via refresh token");
+
+    // update validation key
+    self.update_validation_key().await?;
+
+    // verify id token with validation key
+    let Ok(_clm) = self.verify_id_token().await else {
+      bail!(AuthError::InvalidIdToken);
+    };
+
+    info!("Refresh success!");
     Ok(())
   }
 

@@ -64,7 +64,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn token_api() {
+  async fn token_apis_works() {
     let http_client = MockHttpClient { inner: Client::new() };
 
     let token_api = std::env::var("TOKEN_ENDPOINT").unwrap().parse::<Url>().unwrap();
@@ -79,5 +79,28 @@ mod tests {
       .unwrap();
 
     token_client.login().await.unwrap();
+
+    token_client.refresh().await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn check_expiration() {
+    let http_client = MockHttpClient { inner: Client::new() };
+
+    let token_api = std::env::var("TOKEN_ENDPOINT").unwrap().parse::<Url>().unwrap();
+    let auth_config = AuthenticationConfig {
+      token_api,
+      client_id: std::env::var("CLIENT_ID").unwrap(),
+      username: std::env::var("ADMIN_NAME").unwrap(),
+      password: std::env::var("ADMIN_PASSWORD").unwrap(),
+    };
+    let token_client = TokenClient::new(&auth_config, Arc::new(RwLock::new(http_client)))
+      .await
+      .unwrap();
+
+    token_client.login().await.unwrap();
+
+    let remaining = token_client.remaining_seconds_until_expiration().await.unwrap();
+    assert!(remaining > 0);
   }
 }

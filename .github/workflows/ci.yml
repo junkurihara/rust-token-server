@@ -23,4 +23,5 @@ jobs:
           cargo test --verbose --package rust-token-server
 
       - name: TODO Run unit tests for rust-token-server-client
-        run: echo "TODO!"
+        run: |
+          bash client_test.sh

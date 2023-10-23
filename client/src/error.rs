@@ -30,6 +30,8 @@ pub enum AuthError {
   NoKeyIdInIdToken,
   #[error("No Id token previously retrieved")]
   NoIdToken,
+  #[error("No refresh token previously retrieved")]
+  NoRefreshToken,
   #[error("No validation key previously retrieved")]
   NoValidationKey,
 }

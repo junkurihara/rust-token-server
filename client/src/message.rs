@@ -14,6 +14,7 @@ pub(super) struct AuthenticationReqInner {
   pub password: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 /// Auth response
 pub(super) struct AuthenticationResponse {
@@ -26,4 +27,11 @@ pub(super) struct AuthenticationResponse {
 /// Jwks response
 pub(super) struct JwksResponse {
   pub keys: Vec<serde_json::Value>,
+}
+
+/// Authentication request
+#[derive(Serialize, Debug)]
+pub(super) struct RefreshRequest {
+  pub refresh_token: String,
+  pub client_id: Option<String>,
 }
