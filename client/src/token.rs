@@ -1,4 +1,4 @@
-use crate::{error::*, AuthenticationConfig};
+use crate::{error::*, log::*, AuthenticationConfig};
 use jwt_simple::{
   prelude::*,
   token::{Token, TokenMetadata},
@@ -9,13 +9,16 @@ use std::str::FromStr;
 #[derive(Debug)]
 pub(crate) enum Algorithm {
   ES256,
+  Ed25519,
 }
 impl FromStr for Algorithm {
   type Err = anyhow::Error;
+  /// from "alg" string in a JWT
   fn from_str(s: &str) -> Result<Self> {
     match s {
       "ES256" => Ok(Algorithm::ES256),
-      _ => Err(anyhow!("Invalid Algorithm Name")),
+      "EdDSA" => Ok(Algorithm::Ed25519),
+      _ => Err(AuthError::UnsupportedAlg.into()),
     }
   }
 }
@@ -23,6 +26,7 @@ impl FromStr for Algorithm {
 #[derive(Debug, Clone)]
 pub enum VerificationKeyType {
   ES256(ES256PublicKey),
+  Ed25519(Ed25519PublicKey),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -52,7 +56,7 @@ pub struct TokenMeta {
 impl TokenInner {
   /// Decode id token and retrieve metadata
   pub async fn decode_id_token(&self) -> Result<TokenMetadata> {
-    Token::decode_metadata(&self.id).map_err(|e| anyhow!(e))
+    Token::decode_metadata(&self.id).map_err(|e| AuthError::FailedToDecodeIdToken(e).into())
   }
 
   /// Verify id token with key string
@@ -72,29 +76,21 @@ impl TokenInner {
 
     let clm: JWTClaims<NoCustomClaims> = match Algorithm::from_str(meta.algorithm())? {
       Algorithm::ES256 => {
+        debug!("Verifying ES256");
         let VerificationKeyType::ES256(key) = validation_key else {
-          bail!("validation key is inconsistent!");
+          bail!(AuthError::InconsistentKtyAndAlg);
+        };
+        key.verify_token::<NoCustomClaims>(&self.id, Some(options))?
+      }
+      Algorithm::Ed25519 => {
+        debug!("Verifying Ed25519");
+        let VerificationKeyType::Ed25519(key) = validation_key else {
+          bail!(AuthError::InconsistentKtyAndAlg);
         };
         key.verify_token::<NoCustomClaims>(&self.id, Some(options))?
       }
     };
 
-    //TODO: Ed25519!
-
     Ok(clm)
   }
-  // pub async fn id_token_expires_in_secs(&self) -> Result<i64> {
-  //   // This returns unix time in secs
-  //   let clm = self.verify_id_token().await?;
-  //   let expires_at: i64 = clm.expires_at.unwrap().as_secs() as i64;
-  //   let dt: DateTime<Local> = Local::now();
-  //   let timestamp = dt.timestamp();
-  //   let expires_in_secs = expires_at - timestamp;
-  //   if expires_in_secs < CREDENTIAL_REFRESH_MARGIN {
-  //     // try to refresh immediately
-  //     return Ok(0);
-  //   }
-
-  //   Ok(expires_in_secs)
-  // }
 }

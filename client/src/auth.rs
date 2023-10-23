@@ -7,7 +7,9 @@ use crate::{
   AuthenticationConfig,
 };
 use async_trait::async_trait;
-use jwt_simple::prelude::ES256PublicKey;
+use base64::{engine::general_purpose, Engine as _};
+use chrono::{DateTime, Local};
+use jwt_simple::prelude::{ES256PublicKey, Ed25519PublicKey, JWTClaims, NoCustomClaims};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -64,7 +66,7 @@ where
     let mut login_endpoint = self.config.token_api.clone();
     login_endpoint
       .path_segments_mut()
-      .map_err(|_| anyhow!("Failed to parse token api url".to_string()))?
+      .map_err(|_| AuthError::UrlError)?
       .push(ENDPOINT_LOGIN_PATH);
 
     let json_request = AuthenticationRequest {
@@ -93,17 +95,15 @@ where
 
     info!("Token retrieved");
 
-    // // update validation key
-    // self.update_validation_key().await?;
+    // update validation key
+    self.update_validation_key().await?;
 
-    // // verify id token with validation key
-    // let Ok(_clm) = self.verify_id_token().await else {
-    //   return Err(DapError::AuthenticationError(
-    //     "Invalid Id token! Carefully check if target DNS or Token API is compromised!".to_string(),
-    //   ));
-    // };
+    // verify id token with validation key
+    let Ok(_clm) = self.verify_id_token().await else {
+      bail!(AuthError::InvalidIdToken);
+    };
 
-    // info!("Login success!");
+    info!("Login success!");
     Ok(())
   }
 
@@ -111,17 +111,17 @@ where
   async fn update_validation_key(&self) -> Result<()> {
     let id_token_lock = self.id_token.read().await;
     let Some(id_token) = id_token_lock.as_ref() else {
-      bail!("No id token");
+      bail!(AuthError::NoIdToken);
     };
     let meta = id_token.decode_id_token().await?;
     drop(id_token_lock);
 
-    let key_id = meta.key_id().ok_or_else(|| anyhow!("No key id in token"))?;
+    let key_id = meta.key_id().ok_or_else(|| AuthError::NoKeyIdInIdToken)?;
 
     let mut jwks_endpoint = self.config.token_api.clone();
     jwks_endpoint
       .path_segments_mut()
-      .map_err(|_| anyhow!("Failed to parse token api url".to_string()))?
+      .map_err(|_| AuthError::UrlError)?
       .push(ENDPOINT_JWKS_PATH);
 
     let client_lock = self.http_client.read().await;
@@ -133,27 +133,41 @@ where
       kid == key_id
     });
     if matched_key.is_none() {
-      bail!(
-        "No JWK matched to Id token is given at jwks endpoint! key_id: {}",
-        key_id
-      );
+      bail!(AuthError::NoJwkMatched {
+        kid: key_id.to_string()
+      });
     }
 
     let mut matched = matched_key.unwrap().clone();
     let Some(matched_jwk) = matched.as_object_mut() else {
-      bail!("Invalid jwk retrieved from jwks endpoint");
+      bail!(AuthError::InvalidJwk);
     };
     matched_jwk.remove_entry("kid");
     let Ok(jwk_string) = serde_json::to_string(matched_jwk) else {
-      bail!("Failed to serialize jwk");
+      bail!(AuthError::FailedToSerializeJwk);
     };
     debug!("Matched JWK given at jwks endpoint is {}", &jwk_string);
 
+    let Some(crv) = matched_jwk.get("crv") else {
+      bail!(AuthError::InvalidJwk);
+    };
+    let crv = crv.as_str().unwrap_or("");
+
     let verification_key = match Algorithm::from_str(meta.algorithm())? {
       Algorithm::ES256 => {
+        ensure!(crv == "P-256", AuthError::InvalidJwk);
         let pk = p256::PublicKey::from_jwk_str(&jwk_string)?;
         let sec1key = pk.to_encoded_point(false);
         VerificationKeyType::ES256(ES256PublicKey::from_bytes(sec1key.as_bytes())?)
+      }
+      Algorithm::Ed25519 => {
+        ensure!(crv == "Ed25519", AuthError::InvalidJwk);
+        let Some(x) = matched_jwk.get("x") else {
+          bail!(AuthError::InvalidJwk);
+        };
+        let x = x.as_str().unwrap_or("");
+        let x = general_purpose::URL_SAFE_NO_PAD.decode(x)?;
+        VerificationKeyType::Ed25519(Ed25519PublicKey::from_bytes(x.as_slice())?)
       }
     };
 
@@ -166,69 +180,32 @@ where
     Ok(())
   }
 
-  // /// Verify id token
-  // async fn verify_id_token(&self) -> Result<JWTClaims<NoCustomClaims>> {
-  //   let vk_lock = self.validation_key.read().await;
-  //   let Some(vk) = vk_lock.as_ref() else {
-  //     return Err(DapError::AuthenticationError("No validation key".to_string()));
-  //   };
-  //   let verification_key = vk.to_owned();
-  //   drop(vk_lock);
-
-  //   let token_lock = self.id_token.read().await;
-  //   let Some(token_inner) = token_lock.as_ref() else {
-  //     return Err(DapError::AuthenticationError("No id token".to_string()));
-  //   };
-  //   let token = token_inner.clone();
-  //   drop(token_lock);
-
-  //   token.verify_id_token(&verification_key, &self.config).await
-  // }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use reqwest::Client;
-  use serde::de::DeserializeOwned;
-  struct MockHttpClient {
-    inner: Client,
-  }
-  #[async_trait]
-  impl TokenHttpClient for MockHttpClient {
-    async fn post_json<S, R>(&self, url: &Url, json_body: &S) -> Result<R>
-    where
-      S: Serialize + Send + Sync,
-      R: DeserializeOwned + Send + Sync,
-    {
-      let res = self.inner.post(url.to_owned()).json(json_body).send().await?;
-      let json_res = res.json::<R>().await?;
-
-      Ok(json_res)
-    }
-    async fn get_json<R>(&self, url: &Url) -> Result<R>
-    where
-      R: DeserializeOwned + Send + Sync,
-    {
-      let res = self.inner.get(url.to_owned()).send().await?;
-      let json_res = res.json::<R>().await?;
-
-      Ok(json_res)
-    }
-  }
-
-  #[tokio::test]
-  async fn token_api() {
-    let http_client = MockHttpClient { inner: Client::new() };
-    let url = "http://localhost:8000/v1.0/tokens".parse::<Url>().unwrap();
-    let json_body = AuthenticationRequest {
-      auth: AuthenticationReqInner {
-        username: "admin".to_string(),
-        password: std::env::var("ADMIN_PASSWORD").unwrap(),
-      },
-      client_id: std::env::var("CLIENT_ID").unwrap(),
+  /// Verify id token
+  async fn verify_id_token(&self) -> Result<JWTClaims<NoCustomClaims>> {
+    let vk_lock = self.validation_key.read().await;
+    let Some(vk) = vk_lock.as_ref() else {
+      bail!(AuthError::NoValidationKey);
     };
-    let res: AuthenticationResponse = http_client.post_json(&url, &json_body).await.unwrap();
-    println!("{:?}", res);
+    let verification_key = vk.to_owned();
+    drop(vk_lock);
+
+    let token_lock = self.id_token.read().await;
+    let Some(token_inner) = token_lock.as_ref() else {
+      bail!(AuthError::NoIdToken);
+    };
+    let token = token_inner.clone();
+    drop(token_lock);
+
+    token.verify_id_token(&verification_key, &self.config).await
+  }
+
+  /// Remaining seconds until expiration of id token
+  pub async fn remaining_seconds_until_expiration(&self) -> Result<i64> {
+    // These return unix time in secs
+    let clm = self.verify_id_token().await?;
+    let expires_at: i64 = clm.expires_at.unwrap().as_secs() as i64;
+    let current = Local::now().timestamp();
+
+    Ok(expires_at - current)
   }
 }

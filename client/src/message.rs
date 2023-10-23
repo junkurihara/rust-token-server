@@ -2,12 +2,12 @@ use crate::token::{TokenInner, TokenMeta};
 use serde::{Deserialize, Serialize};
 
 /// Authentication request
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub(super) struct AuthenticationRequest {
   pub auth: AuthenticationReqInner,
   pub client_id: String,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// Auth req inner
 pub(super) struct AuthenticationReqInner {
   pub username: String,
