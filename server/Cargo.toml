@@ -32,10 +32,3 @@ validator = { version = "0.16", features = ["derive"] }
 rust-argon2 = "2.0.0"
 jwt-compact = { version = "0.8.0", features = ["p256", "ed25519-compact"] }
 url = "2.4.1"
-
-[profile.release]
-codegen-units = 1
-incremental = false
-lto = "fat"
-opt-level = 3
-panic = "abort"
