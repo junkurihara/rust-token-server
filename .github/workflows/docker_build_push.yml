@@ -32,18 +32,18 @@ jobs:
         if: ${{ github.ref_name == 'main' }}
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./server
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          file: ./Dockerfile
+          file: ./server/Dockerfile
 
       - name: Nightly build and push x86_64
         if: ${{ github.ref_name == 'develop' }}
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:nightly
-          file: ./Dockerfile
+          file: ./server/Dockerfile
