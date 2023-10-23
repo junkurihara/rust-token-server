@@ -17,14 +17,13 @@ pub const USER_TABLE_NAME: &str = "users";
 pub const REFRESH_TOKEN_TABLE_NAME: &str = "tokens";
 
 // Argon2 password hashing params
-use argon2::{Config, ThreadMode, Variant, Version};
+use argon2::{Config, Variant, Version};
 pub const ARGON2_CONFIG: Config = Config {
   variant: Variant::Argon2id,
   version: Version::Version13,
   mem_cost: 4096,
   time_cost: 3,
   lanes: 4,
-  thread_mode: ThreadMode::Sequential,
   secret: &[],
   ad: &[],
   hash_length: 32,

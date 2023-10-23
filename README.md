@@ -14,7 +14,7 @@ REST API server to handle JSON Web Token, written in Rust
 Execute the following command at the root of the cloned directory.
 
 ```bash:
-% cargo build --relase
+% cargo build --package rust-token-server --release
 ```
 
 Now you get the executable file `./target/release/rust-token-server`.

@@ -1,37 +1,7 @@
-[package]
-name = "rust-token-server"
-description = "Authentication server handling id token in the context of OIDC"
-version = "0.3.0"
-authors = ["Jun Kurihara"]
-homepage = "https://github.com/junkurihara/rust-token-server"
-repository = "https://github.com/junkurihara/rust-token-server"
-license = "MIT"
-readme = "README.md"
-edition = "2021"
-publish = false
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.75"
-axum = { version = "0.6.20", features = ["headers"] }
-base64 = "0.21.2"
-chrono = "0.4.26"
-clap = { version = "4.4.0", features = ["std", "cargo", "wrap_help"] }
-jwt-simple = "0.11.6"
-rand = "0.8.5"
-serde = { version = "1.0.186", features = ["derive"] }
-serde_json = "1.0.105"
-tokio = { version = "1.32.0", features = ["full"] }
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-sqlx = { version = "0.6.3", features = ["sqlite", "runtime-tokio-rustls"] }
-async-trait = "0.1.73"
-uuid = { version = "1.4.1", features = ["v4"] }
-validator = { version = "0.16", features = ["derive"] }
-rust-argon2 = "1.0.1"
-jwt-compact = { version = "0.7.0", features = ["p256", "ed25519-compact"] }
-url = "2.4.0"
+members = ["client", "server"]
+resolver = "2"
 
 [profile.release]
 codegen-units = 1
@@ -39,3 +9,4 @@ incremental = false
 lto = "fat"
 opt-level = 3
 panic = "abort"
+strip = true
