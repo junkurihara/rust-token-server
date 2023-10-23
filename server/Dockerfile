@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -qy --no-install-recommends $BUILD_DEPS &&
     curl -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain stable && \
     export PATH="$HOME/.cargo/bin:$PATH" && \
     echo "Building token server from source" && \
-    cargo build --release && \
+    cargo build --release --package=rust-token-server && \
     mkdir -p /opt/token-server/sbin && \
     mv target/release/rust-token-server /opt/token-server/sbin/ && \
     strip --strip-all /opt/token-server/sbin/rust-token-server && \
@@ -32,8 +32,8 @@ RUN apt-get update && apt-get install -qy --no-install-recommends $BUILD_DEPS &&
     rm -fr ~/.cargo ~/.rustup && \
     rm -fr /tmp/* /var/tmp/* /var/cache/apt/* /var/lib/apt/lists/* /var/log/apt/* /var/log/*.log
 
-COPY docker-bin/entrypoint.sh /
-COPY docker-bin/run.sh /
+COPY server/docker-bin/entrypoint.sh /
+COPY server/docker-bin/run.sh /
 
 RUN chmod 755 /entrypoint.sh &&\
     chmod 755 /run.sh
