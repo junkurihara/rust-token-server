@@ -32,7 +32,7 @@ jobs:
         if: ${{ github.ref_name == 'main' }}
         uses: docker/build-push-action@v5
         with:
-          context: ./server
+          context: ./
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
