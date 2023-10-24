@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 #[derive(Debug)]
-pub(crate) enum Algorithm {
+pub enum Algorithm {
   ES256,
   Ed25519,
 }

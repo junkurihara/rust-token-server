@@ -6,6 +6,7 @@ mod message;
 mod token;
 
 pub use auth::{TokenClient, TokenHttpClient};
+pub use token::{Algorithm, TokenInner, TokenMeta, VerificationKeyType};
 use url::Url;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
