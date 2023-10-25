@@ -6,6 +6,7 @@ mod message;
 mod token;
 
 pub use auth::{TokenClient, TokenHttpClient};
+pub use token::{Algorithm, TokenInner, TokenMeta, VerificationKeyType};
 use url::Url;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -79,8 +80,10 @@ mod tests {
       .unwrap();
 
     token_client.login().await.unwrap();
+    assert!(token_client.token().await.is_ok());
 
     token_client.refresh().await.unwrap();
+    assert!(token_client.token().await.is_ok());
   }
 
   #[tokio::test]
@@ -99,6 +102,7 @@ mod tests {
       .unwrap();
 
     token_client.login().await.unwrap();
+    assert!(token_client.token().await.is_ok());
 
     let remaining = token_client.remaining_seconds_until_expiration().await.unwrap();
     assert!(remaining > 0);

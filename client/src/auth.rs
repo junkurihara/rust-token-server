@@ -258,4 +258,16 @@ where
 
     Ok(expires_at - current)
   }
+
+  /// Get id and refresh tokens with some meta data
+  pub async fn token(&self) -> Result<TokenInner> {
+    let token_lock = self.id_token.read().await;
+    let Some(token_inner) = token_lock.as_ref() else {
+      bail!(AuthError::NoIdToken);
+    };
+    let token = token_inner.clone();
+    drop(token_lock);
+
+    Ok(token)
+  }
 }
