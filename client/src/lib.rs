@@ -80,8 +80,10 @@ mod tests {
       .unwrap();
 
     token_client.login().await.unwrap();
+    assert!(token_client.token().await.is_ok());
 
     token_client.refresh().await.unwrap();
+    assert!(token_client.token().await.is_ok());
   }
 
   #[tokio::test]
@@ -100,6 +102,7 @@ mod tests {
       .unwrap();
 
     token_client.login().await.unwrap();
+    assert!(token_client.token().await.is_ok());
 
     let remaining = token_client.remaining_seconds_until_expiration().await.unwrap();
     assert!(remaining > 0);
