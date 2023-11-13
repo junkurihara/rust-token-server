@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["lib-verifier", "lib-client", "server"]
+members = ["lib-validator", "lib-client", "server"]
 resolver = "2"
 
 [profile.release]
