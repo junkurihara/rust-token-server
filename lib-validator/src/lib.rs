@@ -7,6 +7,9 @@ mod validator;
 use url::Url;
 
 pub use validator::{JwksHttpClient, TokenValidator};
+pub mod reexports {
+  pub use jwt_simple::prelude::{JWTClaims, NoCustomClaims};
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 /// Validation of source, typically user clients, using Id token
