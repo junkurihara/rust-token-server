@@ -37,7 +37,6 @@ mod tests {
   use reqwest::Client;
   use serde::de::DeserializeOwned;
   use std::{sync::Arc, time::Duration};
-  use tokio::sync::RwLock;
 
   pub const JWKS_REFETCH_TIMEOUT_SEC: u64 = 3;
 
@@ -73,7 +72,7 @@ mod tests {
         client_ids: vec![std::env::var("CLIENT_ID").unwrap()],
       }],
     };
-    let token_validator = TokenValidator::try_new(&config, Arc::new(RwLock::new(http_client))).await?;
+    let token_validator = TokenValidator::try_new(&config, Arc::new(http_client)).await?;
 
     let id_token_path = std::env::var("ID_TOKEN_ENV").unwrap();
     let id_token = std::fs::read_to_string(id_token_path)?.trim().to_string();

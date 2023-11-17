@@ -44,14 +44,14 @@ where
   /// Validation options
   pub(crate) validation_options: VerificationOptions,
   /// http client to fetch jwks
-  jwks_http_client: Arc<RwLock<H>>,
+  jwks_http_client: Arc<H>,
 }
 
 impl<H> TokenValidator<H>
 where
   H: JwksHttpClient,
 {
-  pub async fn try_new(config: &ValidationConfig, http_client: Arc<RwLock<H>>) -> Result<Self> {
+  pub async fn try_new(config: &ValidationConfig, http_client: Arc<H>) -> Result<Self> {
     let inner = config
       .inner
       .iter()
@@ -145,9 +145,7 @@ where
       .map_err(|_| ValidationError::JwksUrlError)?
       .push(ENDPOINT_JWKS_PATH);
 
-    let client = self.jwks_http_client.read().await;
-    let jwks_res = client.fetch_jwks::<JwksResponse>(&jwks_endpoint).await?;
-    drop(client);
+    let jwks_res = self.jwks_http_client.fetch_jwks::<JwksResponse>(&jwks_endpoint).await?;
 
     if jwks_res.keys.is_empty() {
       bail!(ValidationError::EmptyJwks)
