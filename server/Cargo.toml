@@ -14,7 +14,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.75"
-axum = { version = "0.6.20", features = ["headers"] }
+axum = { version = "0.7.1", features = ["headers"] }
 base64 = "0.21.5"
 chrono = "0.4.31"
 clap = { version = "4.4.8", features = ["std", "cargo", "wrap_help"] }
