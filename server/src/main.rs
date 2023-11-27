@@ -19,7 +19,7 @@ use crate::{
 };
 use axum::{
   routing::{get, post},
-  Router, Server,
+  Router,
 };
 use config::parse_opts;
 use std::sync::Arc;
@@ -53,6 +53,7 @@ fn main() -> Result<()> {
 
 async fn define_route(shared_state: Arc<AppState>) {
   let addr = shared_state.listen_socket;
+  let tcp_listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
   info!("Listening on {}", &addr);
 
   // routes nested under /v1.0
@@ -68,7 +69,7 @@ async fn define_route(shared_state: Arc<AppState>) {
     .route("/health", get(health_check))
     .nest("/v1.0", api_routes);
 
-  let server = Server::bind(&addr).serve(router.into_make_service());
+  let server = axum::serve(tcp_listener, router);
 
   if let Err(e) = server.await {
     error!("Server is down!: {e}");
