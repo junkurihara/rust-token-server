@@ -18,7 +18,7 @@ axum = { version = "0.7.1" }
 base64 = "0.21.5"
 chrono = "0.4.31"
 clap = { version = "4.4.8", features = ["std", "cargo", "wrap_help"] }
-jwt-simple = "0.11.9"
+jwt-simple = "0.12.1"
 rand = "0.8.5"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
