@@ -17,8 +17,8 @@ tracing = "0.1.40"
 async-trait = "0.1.74"
 thiserror = "1.0.50"
 url = "2.5.0"
-jwt-simple = "0.11.9"
-spki = { version = "0.7.2", default-features = false, features = [
+jwt-simple = "0.12.1"
+spki = { version = "0.7.3", default-features = false, features = [
   "pem",
   "alloc",
 ] }
