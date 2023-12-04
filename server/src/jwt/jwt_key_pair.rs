@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AdditionalClaimData {
+  #[serde(rename = "iad")]
   pub is_admin: bool,
 }
 pub enum JwtKeyPair {

@@ -1,8 +1,8 @@
-use super::{error::*, log::*, validation_key::ValidationKey, ValidationConfig};
+use super::{error::*, log::*, ValidationConfig};
 use crate::constants::ENDPOINT_JWKS_PATH;
 use async_trait::async_trait;
 use futures::future::join_all;
-use jwt_simple::prelude::{JWTClaims, NoCustomClaims, VerificationOptions};
+use libcommon::{Claims, ValidationKey, ValidationOptions};
 use serde::{de::DeserializeOwned, Deserialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -42,7 +42,7 @@ where
   /// Validation key retrieved from the server
   pub(crate) validation_keys: Arc<RwLock<Option<Vec<ValidationKey>>>>,
   /// Validation options
-  pub(crate) validation_options: VerificationOptions,
+  pub(crate) validation_options: ValidationOptions,
   /// http client to fetch jwks
   jwks_http_client: Arc<H>,
 }
@@ -64,7 +64,7 @@ where
         iss.insert(each.token_issuer.as_str().to_string());
         let mut aud = std::collections::HashSet::new();
         aud.extend(each.client_ids.iter().map(|s| s.to_string()));
-        let validation_options = VerificationOptions {
+        let validation_options = ValidationOptions {
           allowed_issuers: Some(iss),
           allowed_audiences: Some(aud),
           ..Default::default()
@@ -85,13 +85,13 @@ where
   }
 
   /// Validate an id token. Return Ok(()) if validation is successful with any one of validation keys.
-  pub async fn validate(&self, id_token: &str) -> Result<Vec<JWTClaims<NoCustomClaims>>> {
+  pub async fn validate(&self, id_token: &str) -> Result<Vec<Claims>> {
     let futures = self.inner.iter().map(|each| async move {
       let validation_keys = each.validation_keys.read().await;
       if let Some(validation_keys) = validation_keys.as_ref() {
         let res = validation_keys
           .iter()
-          .map(|vk| vk.validate(id_token, Some(&each.validation_options)))
+          .map(|vk| vk.validate(id_token, &each.validation_options))
           .filter_map(|res| {
             if res.as_ref().is_err() {
               debug!("Failed to validate id token: {}", res.as_ref().err().unwrap());
