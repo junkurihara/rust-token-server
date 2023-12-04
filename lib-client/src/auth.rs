@@ -2,7 +2,10 @@ use crate::{constants::*, error::*, log::*, message::*, AuthenticationConfig};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::Local;
-use libcommon::{Claims, TokenOuter, ValidationKey};
+use libcommon::{
+  token_fields::{Field, RefreshToken},
+  Claims, TokenOuter, ValidationKey,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
   marker::{Send, Sync},
@@ -33,7 +36,7 @@ where
   config: AuthenticationConfig,
   http_client: Arc<RwLock<H>>,
   id_token: Arc<RwLock<Option<TokenOuter>>>,
-  refresh_token: Arc<RwLock<Option<String>>>,
+  refresh_token: Arc<RwLock<Option<RefreshToken>>>,
   validation_key: Arc<RwLock<Option<ValidationKey>>>,
 }
 
@@ -73,6 +76,7 @@ where
       .post_json::<_, AuthenticationResponse>(&login_endpoint, &json_request)
       .await?;
     drop(client_lock);
+    println!("res_token: {:#?}", res_token);
 
     if let Some(refresh) = &res_token.token.refresh {
       let mut refresh_token_lock = self.refresh_token.write().await;
@@ -114,7 +118,7 @@ where
       .push(ENDPOINT_REFRESH_PATH);
 
     let json_request = RefreshRequest {
-      refresh_token: refresh_token.clone(),
+      refresh_token: refresh_token.into_string(),
       client_id: Some(self.config.client_id.clone()),
     };
 
