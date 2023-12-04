@@ -1,15 +1,19 @@
 use crate::{error::*, log::*};
-use base64::{engine::general_purpose, Engine as _};
-use jwt_simple::prelude::*;
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+// use base64::{engine::general_purpose, Engine as _};
+//use jwt_simple::prelude::*;
+use jsonwebtoken::{
+  jwk::{self, Jwk},
+  Algorithm, DecodingKey, Validation,
+};
+// use p256::elliptic_curve::sec1::ToEncodedPoint;
 use spki::{der::Decode, Document, SubjectPublicKeyInfoRef};
 
 #[allow(non_upper_case_globals, dead_code)]
 /// Algorithm OIDs
 mod algorithm_oids {
-  /// OID for `id-ecPublicKey`, if you're curious
+  /// OID for `id-ecPublicKey`
   pub const EC: &str = "1.2.840.10045.2.1";
-  /// OID for `id-Ed25519`, if you're curious
+  /// OID for `id-Ed25519`
   pub const Ed25519: &str = "1.3.101.112";
 }
 #[allow(non_upper_case_globals, dead_code)]
@@ -19,26 +23,26 @@ mod params_oids {
   pub const Prime256v1: &str = "1.2.840.10045.3.1.7";
 }
 
-/// Params JWK
-mod params_jwk {
-  /// Key type
-  pub mod kty {
-    pub const EC: &str = "EC";
-    pub const OKP: &str = "OKP";
-  }
-  /// Curve
-  pub mod crv {
-    pub const P256: &str = "P-256";
-    #[allow(non_upper_case_globals)]
-    pub const Ed25519: &str = "Ed25519";
-  }
-}
+// /// Params JWK
+// mod params_jwk {
+//   /// Key type
+//   pub mod kty {
+//     pub const EC: &str = "EC";
+//     pub const OKP: &str = "OKP";
+//   }
+//   /// Curve
+//   pub mod crv {
+//     pub const P256: &str = "P-256";
+//     #[allow(non_upper_case_globals)]
+//     pub const Ed25519: &str = "Ed25519";
+//   }
+// }
 
 #[derive(Clone)]
 /// Validation key for JWT
-pub enum ValidationKey {
-  EdDSA(Ed25519PublicKey),
-  ES256(ES256PublicKey),
+pub struct ValidationKey {
+  inner: DecodingKey,
+  algorithm: Algorithm,
 }
 
 impl ValidationKey {
@@ -54,94 +58,124 @@ impl ValidationKey {
         match param.to_string().as_ref() {
           // prime256v1 = es256
           params_oids::Prime256v1 => {
-            let key = ES256PublicKey::from_pem(pem)?;
-            Ok(Self::ES256(key))
+            let inner = DecodingKey::from_ec_pem(pem.as_ref())?;
+            Ok(Self {
+              inner,
+              algorithm: Algorithm::ES256,
+            })
           }
           _ => bail!(ValidationError::UnsupportedValidationKey),
         }
       }
       // ed25519
       algorithm_oids::Ed25519 => {
-        let key = Ed25519PublicKey::from_pem(pem)?;
-        Ok(Self::EdDSA(key))
+        let inner = DecodingKey::from_ed_pem(pem.as_ref())?;
+        Ok(Self {
+          inner,
+          algorithm: Algorithm::EdDSA,
+        })
       }
       _ => bail!(ValidationError::UnsupportedValidationKey),
     }
   }
   /// Convert from jwk
   pub fn from_jwk(jwk: &serde_json::Value) -> Result<Self> {
-    let mut jwk_clone = jwk.clone();
-    let Some(jwk_map) = jwk_clone.as_object_mut() else {
-      bail!(ValidationError::UnsupportedValidationKey)
-    };
-    jwk_map.remove_entry("kid");
-    let Ok(jwk_string) = serde_json::to_string(jwk_map) else {
-      bail!(ValidationError::UnsupportedValidationKey)
-    };
-    let kty = jwk
-      .get("kty")
-      .map(|v| v.as_str())
-      .and_then(|v| v)
-      .ok_or(ValidationError::UnsupportedValidationKey)?;
-    match kty {
-      // ecdsa case
-      params_jwk::kty::EC => {
-        let crv = jwk
-          .get("crv")
-          .map(|v| v.as_str())
-          .and_then(|v| v)
-          .ok_or(ValidationError::UnsupportedValidationKey)?;
-        match crv {
-          params_jwk::crv::P256 => {
-            let pk = p256::PublicKey::from_jwk_str(&jwk_string).map_err(|e| {
-              error!("Failed to parse jwk {:?}", e);
-              ValidationError::UnsupportedValidationKey
-            })?;
-            let sec1key = pk.to_encoded_point(false);
-            let inner = ES256PublicKey::from_bytes(sec1key.as_bytes())?;
-            Ok(ValidationKey::ES256(inner))
-          }
-          _ => bail!(ValidationError::UnsupportedValidationKey),
-        }
-      }
-      params_jwk::kty::OKP => {
-        let crv = jwk
-          .get("crv")
-          .map(|v| v.as_str())
-          .and_then(|v| v)
-          .ok_or(ValidationError::UnsupportedValidationKey)?;
-        match crv {
-          params_jwk::crv::Ed25519 => {
-            let Some(x) = jwk.get("x") else {
-              bail!(ValidationError::UnsupportedValidationKey)
-            };
-            let x = x.as_str().unwrap_or("");
-            let x = general_purpose::URL_SAFE_NO_PAD.decode(x).map_err(|e| {
-              error!("Failed to parse jwk {:?}", e);
-              ValidationError::UnsupportedValidationKey
-            })?;
-            let inner = Ed25519PublicKey::from_bytes(x.as_slice())?;
-            Ok(ValidationKey::EdDSA(inner))
-          }
-          _ => bail!(ValidationError::UnsupportedValidationKey),
-        }
-      }
+    let jwk_parsed: Jwk = serde_json::from_value(jwk.clone())?;
+    let inner = DecodingKey::from_jwk(&jwk_parsed)?;
+    let vk = match jwk_parsed.algorithm {
+      jwk::AlgorithmParameters::EllipticCurve(ref ec) => match ec.curve {
+        jwk::EllipticCurve::P256 => Self {
+          inner,
+          algorithm: Algorithm::ES256,
+        },
+        _ => bail!(ValidationError::UnsupportedValidationKey),
+      },
+      jsonwebtoken::jwk::AlgorithmParameters::OctetKeyPair(ref okp) => match okp.curve {
+        jwk::EllipticCurve::Ed25519 => Self {
+          inner,
+          algorithm: Algorithm::EdDSA,
+        },
+        _ => bail!(ValidationError::UnsupportedValidationKey),
+      },
       _ => bail!(ValidationError::UnsupportedValidationKey),
-    }
+    };
+
+    Ok(vk)
+
+    // let mut jwk_clone = jwk.clone();
+    // let Some(jwk_map) = jwk_clone.as_object_mut() else {
+    //   bail!(ValidationError::UnsupportedValidationKey)
+    // };
+    // jwk_map.remove_entry("kid");
+    // let Ok(jwk_string) = serde_json::to_string(jwk_map) else {
+    //   bail!(ValidationError::UnsupportedValidationKey)
+    // };
+    // let kty = jwk
+    //   .get("kty")
+    //   .map(|v| v.as_str())
+    //   .and_then(|v| v)
+    //   .ok_or(ValidationError::UnsupportedValidationKey)?;
+    // match kty {
+    //   // ecdsa case
+    //   params_jwk::kty::EC => {
+    //     let crv = jwk
+    //       .get("crv")
+    //       .map(|v| v.as_str())
+    //       .and_then(|v| v)
+    //       .ok_or(ValidationError::UnsupportedValidationKey)?;
+    //     match crv {
+    //       params_jwk::crv::P256 => {
+    //         let pk = p256::PublicKey::from_jwk_str(&jwk_string).map_err(|e| {
+    //           error!("Failed to parse jwk {:?}", e);
+    //           ValidationError::UnsupportedValidationKey
+    //         })?;
+    //         let sec1key = pk.to_encoded_point(false);
+    //         let inner = ES256PublicKey::from_bytes(sec1key.as_bytes())?;
+    //         Ok(ValidationKey::ES256(inner))
+    //       }
+    //       _ => bail!(ValidationError::UnsupportedValidationKey),
+    //     }
+    //   }
+    //   params_jwk::kty::OKP => {
+    //     let crv = jwk
+    //       .get("crv")
+    //       .map(|v| v.as_str())
+    //       .and_then(|v| v)
+    //       .ok_or(ValidationError::UnsupportedValidationKey)?;
+    //     match crv {
+    //       params_jwk::crv::Ed25519 => {
+    //         let Some(x) = jwk.get("x") else {
+    //           bail!(ValidationError::UnsupportedValidationKey)
+    //         };
+    //         let x = x.as_str().unwrap_or("");
+    //         let x = general_purpose::URL_SAFE_NO_PAD.decode(x).map_err(|e| {
+    //           error!("Failed to parse jwk {:?}", e);
+    //           ValidationError::UnsupportedValidationKey
+    //         })?;
+    //         let inner = Ed25519PublicKey::from_bytes(x.as_slice())?;
+    //         Ok(ValidationKey::EdDSA(inner))
+    //       }
+    //       _ => bail!(ValidationError::UnsupportedValidationKey),
+    //     }
+    //   }
+    //   _ => bail!(ValidationError::UnsupportedValidationKey),
+    // }
   }
 
   /// Validate JWT
-  pub fn validate(&self, token: &str, opt: Option<&VerificationOptions>) -> Result<JWTClaims<NoCustomClaims>> {
-    match self {
-      Self::EdDSA(key) => {
-        let c = key.verify_token(token, opt.cloned())?;
-        Ok(c)
-      }
-      Self::ES256(key) => {
-        let c = key.verify_token(token, opt.cloned())?;
-        Ok(c)
-      }
-    }
+  pub fn validate(&self, token: &str, opt: &Validation) -> Result<()> {
+    let _res = jsonwebtoken::decode::<TokenInner>(token, &self.inner, opt)?;
+    // match self {
+    //   EdDSA(key) => {
+    //     let c = key.verify_token(token, opt.cloned())?;
+    //     Ok(c)
+    //   }
+    //   Self::ES256(key) => {
+    //     let c = key.verify_token(token, opt.cloned())?;
+    //     Ok(c)
+    //   }
+    // }
+    Ok(())
   }
 }
 
