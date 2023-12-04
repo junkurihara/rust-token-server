@@ -4,7 +4,8 @@ services:
     image: jqtype/token-server:latest
     container_name: token-server
     build:
-      context: ./
+      context: ../
+      dockerfile: ./server/Dockerfile
     restart: unless-stopped
     env_file: .env
     ports:
