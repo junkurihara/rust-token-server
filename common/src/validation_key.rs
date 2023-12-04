@@ -3,11 +3,12 @@ use chrono::{DateTime, Utc};
 use jwt_compact::{
   alg::{Ed25519, Es256},
   jwk::JsonWebKey,
-  Algorithm, AlgorithmExt, Claims, TimeOptions, UntrustedToken,
+  Algorithm, AlgorithmExt, TimeOptions, UntrustedToken,
 };
 use std::collections::HashSet;
 
 pub type JWTClaims = serde_json::Map<String, serde_json::Value>;
+pub type Claims = jwt_compact::Claims<JWTClaims>;
 
 /// Validation key for JWT
 pub enum ValidationKey {
@@ -93,7 +94,7 @@ impl ValidationKey {
   }
 
   /// Validate JWT
-  pub fn validate<T>(&self, token: &str, opt: &ValidationOptions<T>) -> Result<Claims<JWTClaims>>
+  pub fn validate<T>(&self, token: &str, opt: &ValidationOptions<T>) -> Result<Claims>
   where
     T: Fn() -> DateTime<Utc>,
   {

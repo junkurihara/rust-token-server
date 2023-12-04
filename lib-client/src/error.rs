@@ -10,12 +10,6 @@ pub enum AuthError {
     source: Box<dyn std::error::Error + Send + Sync>,
   },
 
-  #[error("Unsupported alg in Id token")]
-  UnsupportedAlg,
-  #[error("Failed to decode Id token")]
-  FailedToDecodeIdToken(anyhow::Error),
-  #[error("Inconsistent kty and alg in jwk")]
-  InconsistentKtyAndAlg,
   #[error("Failed to parse token api url")]
   UrlError,
   #[error("No JWK matched to Id token is given at jwks endpoint! key_id: {kid}")]

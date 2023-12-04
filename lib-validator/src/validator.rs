@@ -2,8 +2,7 @@ use super::{error::*, log::*, ValidationConfig};
 use crate::constants::ENDPOINT_JWKS_PATH;
 use async_trait::async_trait;
 use futures::future::join_all;
-use libcommon::{reexports::Claims, JWTClaims, ValidationKey, ValidationOptions};
-// use jwt_simple::prelude::{JWTClaims, NoCustomClaims, VerificationOptions};
+use libcommon::{Claims, ValidationKey, ValidationOptions};
 use serde::{de::DeserializeOwned, Deserialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -86,7 +85,7 @@ where
   }
 
   /// Validate an id token. Return Ok(()) if validation is successful with any one of validation keys.
-  pub async fn validate(&self, id_token: &str) -> Result<Vec<Claims<JWTClaims>>> {
+  pub async fn validate(&self, id_token: &str) -> Result<Vec<Claims>> {
     let futures = self.inner.iter().map(|each| async move {
       let validation_keys = each.validation_keys.read().await;
       if let Some(validation_keys) = validation_keys.as_ref() {
