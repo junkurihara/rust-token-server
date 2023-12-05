@@ -1,7 +1,6 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
   constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
-  entity::*,
   error::*,
   jwt::{Algorithm, AlgorithmType, JwtKeyPair},
   state::{AppState, CryptoState, TableState},
@@ -10,6 +9,8 @@ use crate::{
 use async_trait::async_trait;
 use clap::{Arg, ArgMatches, Command};
 use std::{fs, net::SocketAddr, str::FromStr};
+
+use libcommon::token_fields::{Audiences, Issuer, TryNewField};
 
 pub(super) struct Run {}
 

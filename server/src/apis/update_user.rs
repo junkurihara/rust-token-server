@@ -1,7 +1,6 @@
 use super::{request::UpdateUserRequest, response::MessageResponse};
 use crate::{
   constants::ADMIN_USERNAME,
-  entity::*,
   state::AppState,
   table::{UserSearchKey, UserTable},
 };
@@ -13,6 +12,8 @@ use axum::{
 };
 use serde_json::json;
 use std::sync::Arc;
+
+use libcommon::token_fields::{IdToken, SubscriberId, TryNewField};
 
 #[derive(Debug)]
 pub enum UpdateUserError {
@@ -83,9 +84,10 @@ pub async fn update_user(
     .table
     .user
     .update_user(&sub, request.auth.username.as_ref(), request.auth.password.as_ref())
-    .await else {
-      return Err(UpdateUserError::UserUpdateFailed);
-    };
+    .await
+  else {
+    return Err(UpdateUserError::UserUpdateFailed);
+  };
 
   Ok(Json(MessageResponse {
     message: "ok. updated the user.".to_string(),

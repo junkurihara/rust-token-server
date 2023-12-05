@@ -13,6 +13,8 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
+use libcommon::token_fields::{IdToken, SubscriberId, TryNewField};
+
 #[derive(Debug)]
 pub enum CreateUserError {
   UserCreationFailed,

@@ -1,6 +1,7 @@
+use crate::entity::{Password, Username};
 use serde::Deserialize;
 
-use crate::entity::{ClientId, Password, RefreshTokenInner, Username};
+use libcommon::token_fields::{ClientId, RefreshToken};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PasswordCredentialRequest {
@@ -21,7 +22,7 @@ pub struct TokensRequest {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RefreshRequest {
-  pub refresh_token: RefreshTokenInner,
+  pub refresh_token: RefreshToken,
   pub client_id: Option<ClientId>,
 }
 

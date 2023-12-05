@@ -1,7 +1,6 @@
 use super::{request::RefreshRequest, response::TokensResponse};
 use crate::{
   constants::DEFAUTL_CLIENT_ID,
-  entity::{ClientId, Entity, TryNewEntity},
   log::*,
   state::AppState,
   table::{UserSearchKey, UserTable},
@@ -14,6 +13,8 @@ use axum::{
 };
 use serde_json::json;
 use std::sync::Arc;
+
+use libcommon::token_fields::{ClientId, Field, TryNewField};
 
 #[derive(Debug)]
 pub enum RefreshError {
@@ -60,7 +61,12 @@ pub async fn refresh(
     cid
   };
   // check user existence
-  let Ok(entry_opt) = state.table.refresh_token.prune_and_find(&refresh_token, &client_id).await else {
+  let Ok(entry_opt) = state
+    .table
+    .refresh_token
+    .prune_and_find(&refresh_token, &client_id)
+    .await
+  else {
     return Err(RefreshError::TokenCreationFailed);
   };
   let Some(entry) = entry_opt else {
@@ -68,16 +74,21 @@ pub async fn refresh(
   };
 
   // find user by subscriber_id
-  let Ok(Some(user)) = state.table.user.find_user(UserSearchKey::SubscriberId(&entry.subscriber_id)).await else{
+  let Ok(Some(user)) = state
+    .table
+    .user
+    .find_user(UserSearchKey::SubscriberId(&entry.subscriber_id))
+    .await
+  else {
     return Err(RefreshError::TokenCreationFailed);
   };
 
   // generate id_token without refresh token
   let Ok(token) = state.crypto.generate_token(&user, &client_id, false) else {
-    return Err(RefreshError::TokenCreationFailed)
+    return Err(RefreshError::TokenCreationFailed);
   };
   Ok(Json(TokensResponse {
-    token: token.inner,
+    token: token.body,
     metadata: token.meta,
     message: "ok. id_token is refreshed.".to_string(),
   }))

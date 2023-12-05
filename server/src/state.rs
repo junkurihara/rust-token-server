@@ -1,12 +1,13 @@
 use crate::{
-  entity::{Audiences, ClientId, IdToken, Issuer, User},
+  entity::User,
   error::*,
   jwt::{AdditionalClaimData, Algorithm, JwtKeyPair, Token},
   table::{SqliteRefreshTokenTable, SqliteUserTable},
 };
 use jwt_simple::prelude::JWTClaims;
 use std::net::SocketAddr;
-// use libcommon::Claims;
+
+use libcommon::token_fields::{Audiences, ClientId, IdToken, Issuer};
 
 pub struct CryptoState {
   pub algorithm: Algorithm,

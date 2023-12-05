@@ -4,7 +4,6 @@ mod issuer;
 mod refresh_token;
 mod subscriber_id;
 
-pub mod metadata;
 pub use client_apps::{Audiences, ClientId};
 pub use id_token::IdToken;
 pub use issuer::Issuer;

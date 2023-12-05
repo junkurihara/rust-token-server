@@ -1,17 +1,23 @@
-use crate::{entity::*, error::*, log::*};
+use crate::{
+  token_fields::*,
+  validation_key::{Claims, ValidationKey, ValidationOptions},
+};
+use anyhow::{anyhow, bail, Result};
 use base64::Engine;
 use chrono::{DateTime, TimeZone, Utc};
-use serde::Serialize;
+use jwt_compact::{self, UntrustedToken};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt;
+use std::collections::HashSet;
+pub use tracing::debug;
 
-// TODO: 構造体でserializerをちゃんと定義してvalidatorを置いておくほうが良い
-#[derive(Serialize, Debug, Clone)]
-pub struct TokenInner {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Token body
+pub struct TokenBody {
   /// id_token jwt itself is given here as string
   pub id: IdToken, //String,
   /// refresh token if required
-  pub refresh: Option<RefreshTokenInner>,
+  pub refresh: Option<RefreshToken>,
   /// issued at in unix time
   pub issued_at: String,
   /// expires in unix time
@@ -24,34 +30,41 @@ pub struct TokenInner {
   pub subscriber_id: SubscriberId,
 }
 
-impl fmt::Display for TokenInner {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "sub: {}, iss: {}, iat: {}, exp: {}, aud: {:?}",
-      self.subscriber_id.as_str(),
-      self.issuer.as_str(),
-      self.issued_at,
-      self.expires,
-      self.allowed_apps
-    )
+impl TokenBody {
+  /// Decode id token and retrieve metadata
+  pub fn decode_id_token(&self) -> Result<UntrustedToken> {
+    // Token::decode_metadata(&self.id).map_err(|e| AuthError::FailedToDecodeIdToken(e).into())
+    Ok(UntrustedToken::new(self.id.as_str())?)
+  }
+
+  /// Verify id token with key string
+  pub async fn verify_id_token(
+    &self,
+    validation_key: &ValidationKey,
+    client_id: &str,
+    token_api: &str,
+  ) -> Result<Claims> {
+    let options = ValidationOptions {
+      allowed_audiences: Some(HashSet::from([client_id.into()])),
+      allowed_issuers: Some(HashSet::from([token_api.into()])),
+      ..Default::default()
+    };
+
+    let res = validation_key.validate(self.id.as_str(), &options)?;
+
+    Ok(res)
   }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Token metadata
 pub struct TokenMeta {
-  pub username: Username,
-  pub is_admin: IsAdmin,
+  pub username: String,
+  pub is_admin: bool,
 }
 
-#[derive(Serialize, Debug, Clone)]
-pub struct Token {
-  pub inner: TokenInner,
-  pub meta: TokenMeta,
-}
-
-impl TokenInner {
-  pub(super) fn new(id_token: &IdToken, refresh_required: bool) -> Result<Self> {
+impl TokenBody {
+  pub fn new(id_token: &IdToken, refresh_required: bool) -> Result<Self> {
     // get token info
     let parsed: Vec<&str> = id_token.as_str().split('.').collect();
     let decoded_claims =
@@ -66,7 +79,7 @@ impl TokenInner {
     let iat = json_value["iat"].to_string().parse::<i64>()?;
     let exp = json_value["exp"].to_string().parse::<i64>()?;
     let Some(iss) = json_value["iss"].as_str() else {
-    bail!("No issuer is specified in JWT");
+      bail!("No issuer is specified in JWT");
     };
     let aud = if let Value::Array(aud_vec) = &json_value["aud"] {
       let iter = aud_vec
@@ -81,9 +94,9 @@ impl TokenInner {
     let issued_at: DateTime<Utc> = Utc.timestamp_opt(iat, 0).unwrap();
     let expires: DateTime<Utc> = Utc.timestamp_opt(exp, 0).unwrap();
 
-    let refresh: Option<RefreshTokenInner> = if refresh_required {
+    let refresh: Option<RefreshToken> = if refresh_required {
       debug!("[{subscriber_id}] Create refresh token");
-      Some(RefreshTokenInner::generate()?)
+      Some(RefreshToken::generate()?)
     } else {
       None
     };
@@ -100,18 +113,9 @@ impl TokenInner {
   }
 }
 
-impl TokenMeta {
-  pub(super) fn new(user: &User) -> Self {
-    Self {
-      username: user.username.clone(),
-      is_admin: user.is_admin.clone(),
-    }
-  }
-}
-
 #[cfg(test)]
 mod tests {
-  use crate::{constants::REFRESH_TOKEN_LEN, entity::Password};
+  use crate::constants::REFRESH_TOKEN_LEN;
 
   use super::*;
 
@@ -119,7 +123,7 @@ mod tests {
   fn test_token_inner() {
     let test_vector = IdToken::new("eyJhbGciOiJFZERTQSIsImtpZCI6ImdqckU3QUNNeGd6WWZGSGdhYmdmNGtMVGcxZUtJZHNKOTRBaUZURmoxaXMiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2ODA3MDM2MzAsImV4cCI6MTY4MDcwNTQzMCwibmJmIjoxNjgwNzAzNjMwLCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20vdjEuMCIsInN1YiI6IjY5ZjUwZmZiLTM1NTYtNDQ2ZS05YTMwLWFmODZhMmE2NjAwNyIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.afZPBq5405DUehIPP6EG2psDPOMngOuZzT-ySPraJFTTJT0TDoaa3hzAS_Ug_UXSPsxYGmZnrVBBgA4TEfTHCQ").unwrap();
 
-    let token_inner = TokenInner::new(&test_vector, true).expect("Token inner is invalid");
+    let token_inner = TokenBody::new(&test_vector, true).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_some());
     assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
     assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
@@ -130,7 +134,7 @@ mod tests {
       "69f50ffb-3556-446e-9a30-af86a2a66007"
     );
 
-    let token_inner = TokenInner::new(&test_vector, false).expect("Token inner is invalid");
+    let token_inner = TokenBody::new(&test_vector, false).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_none());
     assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
     assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
@@ -144,25 +148,18 @@ mod tests {
       "69f50ffb-3556-446e-9a30-af86a2a66007"
     );
   }
+
   #[test]
   fn test_token_meta() {
-    let username = Username::new("test_user").expect("username creation failed");
-    let password = Password::new("test_pass").expect("password creation failed");
-    let user = User::new(&username, Some(password)).expect("user creation failed");
-    let token_meta = TokenMeta::new(&user);
+    let username = "test_user".to_string();
+    let is_admin = false;
+    let token_meta = TokenMeta { username, is_admin };
     assert_eq!(token_meta.username.as_str(), "test_user");
-    assert!(!token_meta.is_admin.get());
-
-    let username = Username::new("admin").expect("username creation failed");
-    let password = Password::new("test_pass").expect("password creation failed");
-    let user = User::new(&username, Some(password)).expect("user creation failed");
-    let token_meta = TokenMeta::new(&user);
-    assert_eq!(token_meta.username.as_str(), "admin");
-    assert!(token_meta.is_admin.get());
+    assert!(!token_meta.is_admin);
   }
   #[test]
   fn test_refresh() {
-    let refresh = RefreshTokenInner::generate().expect("Refresh token creation failed");
+    let refresh = RefreshToken::generate().expect("Refresh token creation failed");
     assert_eq!(refresh.as_str().len(), REFRESH_TOKEN_LEN);
   }
 }

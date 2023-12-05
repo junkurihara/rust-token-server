@@ -1,17 +1,14 @@
-use super::{
-  alg::Algorithm,
-  token::{Token, TokenInner, TokenMeta},
-};
-use crate::{
-  constants::*,
-  entity::{self, *},
-  error::*,
-  log::*,
-};
+use super::{alg::Algorithm, Token};
+use crate::{constants::*, entity::*, error::*, log::*};
 use jwt_simple::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
+
+use libcommon::{
+  token_fields::{Audiences, ClientId, Field, IdToken, Issuer, TryNewField},
+  TokenBody, TokenMeta,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AdditionalClaimData {
@@ -92,17 +89,21 @@ impl JwtKeyPair {
     let addition = AdditionalClaimData {
       is_admin: user.is_admin(),
     };
-    let audiences = entity::Audiences::new(client_id.as_str())?.into_string_hashset();
+    let audiences = Audiences::new(client_id.as_str())?.into_string_hashset();
     let claims = Claims::with_custom_claims(addition, Duration::from_mins(JWT_DURATION_MINS as u64))
       .with_subject(user.subscriber_id())
       .with_issuer(token_issuer.as_str())
       .with_audiences(audiences);
     let id_token = IdToken::new(self.generate_jwt_string(claims)?)?;
-    let inner = TokenInner::new(&id_token, refresh_required)?;
-    let meta = TokenMeta::new(user);
-    info!("[{}] Issued a JWT: {}", user.username(), inner);
+    let body = TokenBody::new(&id_token, refresh_required)?;
+    let username = user.username.as_str().to_owned();
+    let meta = TokenMeta {
+      username,
+      is_admin: user.is_admin.get(),
+    };
+    info!("[{}] Issued a JWT: {}", user.username(), body.id.as_str());
 
-    Ok(Token { inner, meta })
+    Ok(Token { body, meta })
   }
 
   /// common operations for JWT verification
@@ -110,7 +111,7 @@ impl JwtKeyPair {
     &self,
     token: &IdToken,
     token_issuer: &Issuer,
-    allowed_audiences: &Option<entity::Audiences>,
+    allowed_audiences: &Option<Audiences>,
   ) -> Result<JWTClaims<AdditionalClaimData>> {
     let mut options = VerificationOptions::default();
     if let Some(allowed) = allowed_audiences {
@@ -167,7 +168,7 @@ mod tests {
       let token = signing_key.generate_token(&user, &client_id, &token_issuer, refresh_required);
       assert!(token.is_ok());
 
-      let id_token = token.unwrap().inner.id;
+      let id_token = token.unwrap().body.id;
       let validation_result = signing_key.verify_token(&id_token, &token_issuer, &None);
       assert!(validation_result.is_ok());
     }
