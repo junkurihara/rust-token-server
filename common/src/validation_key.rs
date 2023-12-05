@@ -1,15 +1,108 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use chrono::{DateTime, Utc};
 use jwt_compact::{
   alg::{Ed25519, Es256},
   jwk::JsonWebKey,
   Algorithm, AlgorithmExt, TimeOptions, UntrustedToken,
 };
+use pkcs8::{der::Decode, Document, PrivateKeyInfo};
 use std::collections::HashSet;
+use tracing::debug;
+
+#[allow(non_upper_case_globals, dead_code)]
+/// Algorithm OIDs
+mod algorithm_oids {
+  /// OID for `id-ecPublicKey`, if you're curious
+  pub const EC: &str = "1.2.840.10045.2.1";
+  /// OID for `id-Ed25519`, if you're curious
+  pub const Ed25519: &str = "1.3.101.112";
+}
+#[allow(non_upper_case_globals, dead_code)]
+/// Params OIDs
+mod params_oids {
+  // Example parameters value: OID for the NIST P-256 elliptic curve.
+  pub const Prime256v1: &str = "1.2.840.10045.3.1.7";
+}
 
 pub type JWTClaims = serde_json::Map<String, serde_json::Value>;
 pub type Claims = jwt_compact::Claims<JWTClaims>;
 
+/* -------------------------------- */
+/// Signing key for JWT
+pub enum SigningKey {
+  Es256(<Es256 as Algorithm>::SigningKey),
+  Ed25519(<Ed25519 as Algorithm>::SigningKey),
+}
+
+impl SigningKey {
+  /// Derive signing key from pem string
+  pub fn from_pem(pem: &str) -> Result<Self> {
+    let (tag, doc) = Document::from_pem(pem).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+    ensure!(tag == "PRIVATE KEY", "Invalid tag");
+
+    let pki = PrivateKeyInfo::from_der(doc.as_bytes()).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+
+    match pki.algorithm.oid.to_string().as_ref() {
+      // ec
+      algorithm_oids::EC => {
+        debug!("Read EC private key");
+        let param = pki
+          .algorithm
+          .parameters_oid()
+          .map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+        match param.to_string().as_ref() {
+          params_oids::Prime256v1 => {
+            let private_key = sec1::EcPrivateKey::try_from(pki.private_key)
+              .map_err(|e| anyhow!("Error decoding EcPrivateKey: {e}"))?
+              .private_key;
+            type SecretKey = <Es256 as Algorithm>::SigningKey;
+            let inner = SecretKey::from_slice(private_key).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+            Ok(Self::Es256(inner))
+          }
+          _ => bail!("Unsupported curve"),
+        }
+      }
+      // ed25519
+      algorithm_oids::Ed25519 => {
+        debug!("Read Ed25519 private key");
+        type SecretKey = <Ed25519 as Algorithm>::SigningKey;
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(&pki.private_key[2..]);
+        let sk = ed25519_compact::KeyPair::from_seed(ed25519_compact::Seed::new(seed))
+          .sk
+          .to_vec();
+        let inner = SecretKey::from_slice(&sk)?;
+        Ok(Self::Ed25519(inner))
+      }
+      _ => bail!("Unsupported algorithm"),
+    }
+  }
+
+  /// Validate JWT using the validation key derived from this signing key
+  pub fn validate<T>(&self, token: &str, opt: &ValidationOptions<T>) -> Result<Claims>
+  where
+    T: Fn() -> DateTime<Utc>,
+  {
+    let vk = self.validation_key();
+    vk.validate(token, opt)
+  }
+
+  /// Get validation key from signing key
+  pub fn validation_key(&self) -> ValidationKey {
+    match &self {
+      Self::Es256(key) => {
+        let vk = key.verifying_key().to_owned();
+        ValidationKey::Es256(vk)
+      }
+      Self::Ed25519(key) => {
+        let vk = key.public_key();
+        ValidationKey::Ed25519(vk)
+      }
+    }
+  }
+}
+
+/* -------------------------------- */
 /// Validation key for JWT
 pub enum ValidationKey {
   Es256(<Es256 as Algorithm>::VerifyingKey),
@@ -158,6 +251,21 @@ mod tests {
   use jwt_compact::TimeOptions;
 
   use super::*;
+
+  const P256_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgv7zxW56ojrWwmSo1\n4uOdbVhUfj9Jd+5aZIB9u8gtWnihRANCAARGYsMe0CT6pIypwRvoJlLNs4+cTh2K\nL7fUNb5i6WbKxkpAoO+6T3pMBG5Yw7+8NuGTvvtrZAXduA2giPxQ8zCf\n-----END PRIVATE KEY-----";
+  const EDDSA_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDSHAE++q1BP7T8tk+mJtS+hLf81B0o6CFyWgucDFN/C\n-----END PRIVATE KEY-----";
+
+  #[test]
+  fn private_pem() -> Result<()> {
+    let keys = [P256_PRIVATE_KEY, EDDSA_PRIVATE_KEY];
+
+    for key in keys.iter() {
+      let sk = SigningKey::from_pem(key)?;
+      let vk = sk.validation_key();
+    }
+
+    Ok(())
+  }
 
   // #[test]
   // fn test_es256_pem() -> std::result::Result<(), anyhow::Error> {
