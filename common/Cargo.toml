@@ -19,3 +19,5 @@ anyhow = "1.0.75"
 chrono = { version = "0.4.31", default-features = false }
 validator = { version = "0.16", features = ["derive"] }
 rand = "0.8.5"
+base64 = "0.21.5"
+tracing = "0.1.40"

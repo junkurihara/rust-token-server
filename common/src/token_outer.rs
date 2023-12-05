@@ -1,11 +1,18 @@
 use crate::{
-  token_fields::*,
+  token_fields::{
+    metadata::{IsAdmin, Username},
+    *,
+  },
   validation_key::{Claims, ValidationKey, ValidationOptions},
 };
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
+use base64::Engine;
+use chrono::{DateTime, TimeZone, Utc};
 use jwt_compact::{self, UntrustedToken};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashSet;
+pub use tracing::debug;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TokenOuter {
@@ -51,8 +58,118 @@ impl TokenOuter {
   }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TokenMeta {
-  pub username: String,
-  pub is_admin: bool,
+  pub username: metadata::Username,
+  pub is_admin: metadata::IsAdmin,
+}
+
+impl TokenOuter {
+  pub(super) fn new(id_token: &IdToken, refresh_required: bool) -> Result<Self> {
+    // get token info
+    let parsed: Vec<&str> = id_token.as_str().split('.').collect();
+    let decoded_claims =
+      base64::engine::GeneralPurpose::new(&base64::alphabet::URL_SAFE, base64::engine::general_purpose::NO_PAD)
+        .decode(parsed[1])?;
+    let json_string = String::from_utf8(decoded_claims)?;
+    let json_value: Value = serde_json::from_str(&json_string).map_err(|e| anyhow!("{}", e))?;
+
+    let Some(subscriber_id) = json_value["sub"].as_str() else {
+      bail!("No issuer is specified in JWT");
+    };
+    let iat = json_value["iat"].to_string().parse::<i64>()?;
+    let exp = json_value["exp"].to_string().parse::<i64>()?;
+    let Some(iss) = json_value["iss"].as_str() else {
+      bail!("No issuer is specified in JWT");
+    };
+    let aud = if let Value::Array(aud_vec) = &json_value["aud"] {
+      let iter = aud_vec
+        .iter()
+        .filter_map(|x| x.as_str())
+        .map(ClientId::new)
+        .filter_map(|v| v.ok());
+      Audiences::from(iter)
+    } else {
+      Audiences::new("")?
+    };
+    let issued_at: DateTime<Utc> = Utc.timestamp_opt(iat, 0).unwrap();
+    let expires: DateTime<Utc> = Utc.timestamp_opt(exp, 0).unwrap();
+
+    let refresh: Option<RefreshToken> = if refresh_required {
+      debug!("[{subscriber_id}] Create refresh token");
+      Some(RefreshToken::generate()?)
+    } else {
+      None
+    };
+
+    Ok(Self {
+      id: id_token.to_owned(),
+      refresh,
+      issuer: Issuer::new(iss)?,
+      allowed_apps: aud,
+      issued_at: issued_at.to_string(),
+      expires: expires.to_string(),
+      subscriber_id: SubscriberId::new(subscriber_id)?,
+    })
+  }
+}
+
+impl TokenMeta {
+  pub(super) fn new(username: &Username, is_admin: IsAdmin) -> Self {
+    Self {
+      username: username.to_owned(),
+      is_admin,
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::constants::REFRESH_TOKEN_LEN;
+
+  use super::*;
+
+  #[test]
+  fn test_token_inner() {
+    let test_vector = IdToken::new("eyJhbGciOiJFZERTQSIsImtpZCI6ImdqckU3QUNNeGd6WWZGSGdhYmdmNGtMVGcxZUtJZHNKOTRBaUZURmoxaXMiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2ODA3MDM2MzAsImV4cCI6MTY4MDcwNTQzMCwibmJmIjoxNjgwNzAzNjMwLCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20vdjEuMCIsInN1YiI6IjY5ZjUwZmZiLTM1NTYtNDQ2ZS05YTMwLWFmODZhMmE2NjAwNyIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.afZPBq5405DUehIPP6EG2psDPOMngOuZzT-ySPraJFTTJT0TDoaa3hzAS_Ug_UXSPsxYGmZnrVBBgA4TEfTHCQ").unwrap();
+
+    let token_inner = TokenOuter::new(&test_vector, true).expect("Token inner is invalid");
+    assert!(token_inner.refresh.is_some());
+    assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
+    assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
+    assert_eq!(token_inner.allowed_apps, Audiences::new("client_id1").unwrap());
+    assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
+    assert_eq!(
+      token_inner.subscriber_id.as_str(),
+      "69f50ffb-3556-446e-9a30-af86a2a66007"
+    );
+
+    let token_inner = TokenOuter::new(&test_vector, false).expect("Token inner is invalid");
+    assert!(token_inner.refresh.is_none());
+    assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
+    assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
+    assert_eq!(
+      token_inner.allowed_apps,
+      Audiences::new("client_id1".to_string()).unwrap()
+    );
+    assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
+    assert_eq!(
+      token_inner.subscriber_id.as_str(),
+      "69f50ffb-3556-446e-9a30-af86a2a66007"
+    );
+  }
+
+  #[test]
+  fn test_token_meta() {
+    let username = Username::new("test_user").unwrap();
+    let is_admin = IsAdmin::new(false).unwrap();
+    let token_meta = TokenMeta::new(&username, is_admin);
+    assert_eq!(token_meta.username.as_str(), "test_user");
+    assert!(!token_meta.is_admin.get());
+  }
+  #[test]
+  fn test_refresh() {
+    let refresh = RefreshToken::generate().expect("Refresh token creation failed");
+    assert_eq!(refresh.as_str().len(), REFRESH_TOKEN_LEN);
+  }
 }
