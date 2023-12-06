@@ -1,29 +1,55 @@
 use crate::{
   entity::User,
   error::*,
-  jwt::{AdditionalClaimData, Algorithm, JwtKeyPair, Token},
   table::{SqliteRefreshTokenTable, SqliteUserTable},
 };
-use jwt_simple::prelude::JWTClaims;
+use libcommon::{
+  token_fields::{Audiences, ClientId, IdToken, Issuer},
+  Claims, SigningKey, TokenBody, TokenMeta, ValidationOptions,
+};
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-use libcommon::token_fields::{Audiences, ClientId, IdToken, Issuer};
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Token generated at server as a response to login request
+pub struct Token {
+  pub body: TokenBody,
+  pub meta: TokenMeta,
+}
 
 pub struct CryptoState {
-  pub algorithm: Algorithm,
-  pub keypair: JwtKeyPair,
+  pub signing_key: SigningKey,
   pub issuer: Issuer,
   pub audiences: Option<Audiences>,
 }
 
 impl CryptoState {
   pub fn generate_token(&self, user: &User, client_id: &ClientId, refresh_required: bool) -> Result<Token> {
-    self
-      .keypair
-      .generate_token(user, client_id, &self.issuer, refresh_required)
+    let body = self.signing_key.authorize(
+      &user.subscriber_id,
+      client_id,
+      &self.issuer,
+      user.is_admin(),
+      refresh_required,
+    )?;
+    let meta = TokenMeta {
+      username: user.username().to_string(),
+      is_admin: user.is_admin(),
+    };
+
+    Ok(Token { body, meta })
   }
-  pub fn verify_token(&self, id_token: &IdToken) -> Result<JWTClaims<AdditionalClaimData>> {
-    self.keypair.verify_token(id_token, &self.issuer, &self.audiences)
+  pub fn verify_token(&self, id_token: &IdToken) -> Result<Claims> {
+    let mut iss = std::collections::HashSet::new();
+    iss.insert(self.issuer.clone());
+
+    let vo = ValidationOptions {
+      allowed_audiences: self.audiences.clone(),
+      allowed_issuers: Some(iss),
+      ..Default::default()
+    };
+
+    self.signing_key.validate(id_token, &vo)
   }
 }
 pub struct TableState {

@@ -4,7 +4,7 @@ mod config;
 mod constants;
 mod entity;
 mod error;
-mod jwt;
+// mod jwt;
 mod log;
 mod state;
 mod table;

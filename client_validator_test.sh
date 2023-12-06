@@ -16,9 +16,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   --token-issuer=${TOKEN_ENDPOINT} \
   --client-ids=${CLIENT_ID} \
   --signing-key-path=./server/sample-keys/p256.private_key.pem \
-  --signing-algorithm=ES256 \
-  --db-file-path=${CLIENT_DB_PATH} \
-  --with-key-id &
+  --db-file-path=${CLIENT_DB_PATH} &
 
 sleep 3
 
@@ -55,9 +53,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   --token-issuer=${TOKEN_ENDPOINT} \
   --client-ids=${CLIENT_ID} \
   --signing-key-path=./server/sample-keys/ed25519.private_key.pem \
-  --signing-algorithm=EdDSA \
-  --db-file-path=${CLIENT_DB_PATH} \
-  --with-key-id &
+  --db-file-path=${CLIENT_DB_PATH}  &
 
 sleep 3
 

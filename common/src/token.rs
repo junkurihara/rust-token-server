@@ -45,12 +45,12 @@ impl TokenBody {
     token_api: &str,
   ) -> Result<Claims> {
     let options = ValidationOptions {
-      allowed_audiences: Some(HashSet::from([client_id.into()])),
-      allowed_issuers: Some(HashSet::from([token_api.into()])),
+      allowed_audiences: Some(Audiences::new(client_id)?),
+      allowed_issuers: Some(HashSet::from([Issuer::new(token_api)?])),
       ..Default::default()
     };
 
-    let res = validation_key.validate(self.id.as_str(), &options)?;
+    let res = validation_key.validate(&self.id, &options)?;
 
     Ok(res)
   }

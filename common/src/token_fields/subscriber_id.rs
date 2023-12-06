@@ -7,7 +7,7 @@ use serde::{
 use std::borrow::Cow;
 use validator::Validate;
 
-#[derive(Debug, Clone, Validate)]
+#[derive(Debug, Clone, PartialEq, Eq, Validate)]
 pub struct SubscriberId {
   #[validate(length(min = 1))]
   value: String,

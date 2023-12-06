@@ -23,6 +23,12 @@ where
     Ok(object)
   }
 }
+impl TryInto<IdToken> for &str {
+  type Error = anyhow::Error;
+  fn try_into(self) -> Result<IdToken> {
+    IdToken::new(self)
+  }
+}
 impl Field for IdToken {
   fn as_str(&self) -> &str {
     &self.value

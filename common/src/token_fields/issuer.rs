@@ -7,7 +7,7 @@ use serde::{
 use std::borrow::Cow;
 use validator::Validate;
 
-#[derive(Debug, Clone, Eq, PartialEq, Validate)]
+#[derive(Debug, Clone, Eq, PartialEq, Validate, Hash)]
 pub struct Issuer {
   #[validate(length(min = 1), url)]
   value: String,

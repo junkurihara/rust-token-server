@@ -65,7 +65,12 @@ pub async fn update_user(
   };
 
   // just in case, check user existence
-  let Some(Ok(sub)) = claims.subject.map(SubscriberId::new) else {
+  let Some(Ok(sub)) = claims
+    .custom
+    .get("subscriber_id")
+    .and_then(|v| v.as_str())
+    .map(SubscriberId::new)
+  else {
     return Err(UpdateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {

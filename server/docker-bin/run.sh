@@ -65,23 +65,19 @@ if [ -n $ADMIN_PASSWORD ]; then
   ADMIN_PASSWORD=${ADMIN_PASSWORD} \
   RUST_LOG=${LOG_LEVEL} \
   /opt/token-server/sbin/rust-token-server run \
-  --signing-algorithm ${SIGNING_ALGORITHM} \
   --signing-key-path /opt/token-server/etc/private_key.pem \
   --db-file-path /opt/token-server/var/userdb.db \
   --token-issuer ${TOKEN_ISSUER} \
   --client-ids ${CLIENT_IDS} \
-  --with-key-id \
   --listen-address 0.0.0.0 \
   --port=8000
 else
   RUST_LOG=${LOG_LEVEL} \
   /opt/token-server/sbin/rust-token-server run \
-  --signing-algorithm ${SIGNING_ALGORITHM} \
   --signing-key-path /opt/token-server/etc/private_key.pem \
   --db-file-path /opt/token-server/var/userdb.db \
   --token-issuer ${TOKEN_ISSUER} \
   --client-ids ${CLIENT_IDS} \
-  --with-key-id \
   --listen-address 0.0.0.0 \
   --port=8000
 fi

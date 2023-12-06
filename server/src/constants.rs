@@ -31,11 +31,6 @@ pub const ARGON2_CONFIG: Config = Config {
 pub const ARGON2_SALT_LEN: usize = 32;
 
 // ID Token settings
-/// Default algorithm for ID Token signing
-pub const DEFAULT_ALGORITHM: &str = "ES256";
-/// Default duration of ID Token validity in minutes
-/// TODO: Clapで設定できるように
-pub const JWT_DURATION_MINS: usize = 30;
 /// Default client ID if no client id check is required
 pub const DEFAUTL_CLIENT_ID: &str = "none";
 /// Default duration of refresh token validity in minutes
