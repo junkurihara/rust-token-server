@@ -4,8 +4,8 @@ services:
     image: jqtype/token-server:latest
     container_name: token-server
     build:
-      context: ../
-      dockerfile: ./server/Dockerfile
+      context: .
+      dockerfile: ./Dockerfile
       platforms:
         - linux/arm64
     restart: unless-stopped

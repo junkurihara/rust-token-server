@@ -1,9 +1,0 @@
-.github/
-.vscode/
-.private/
-target/
-log/
-obsolete/
-lib-validator/
-lib-client/
-common/
