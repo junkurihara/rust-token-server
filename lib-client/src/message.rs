@@ -1,4 +1,4 @@
-use libcommon::{TokenMeta, TokenOuter};
+use libcommon::{TokenBody, TokenMeta};
 // use crate::token::{TokenInner, TokenMeta};
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ pub(super) struct AuthenticationReqInner {
 #[derive(Deserialize, Debug)]
 /// Auth response
 pub(super) struct AuthenticationResponse {
-  pub token: TokenOuter,
+  pub token: TokenBody,
   pub metadata: TokenMeta,
   pub message: String,
 }

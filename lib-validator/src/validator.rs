@@ -2,7 +2,10 @@ use super::{error::*, log::*, ValidationConfig};
 use crate::constants::ENDPOINT_JWKS_PATH;
 use async_trait::async_trait;
 use futures::future::join_all;
-use libcommon::{Claims, ValidationKey, ValidationOptions};
+use libcommon::{
+  token_fields::{Audiences, ClientId, Issuer, TryNewField},
+  Claims, ValidationKey, ValidationOptions,
+};
 use serde::{de::DeserializeOwned, Deserialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -61,9 +64,8 @@ where
         let validation_keys = Arc::new(RwLock::new(None));
 
         let mut iss = std::collections::HashSet::new();
-        iss.insert(each.token_issuer.as_str().to_string());
-        let mut aud = std::collections::HashSet::new();
-        aud.extend(each.client_ids.iter().map(|s| s.to_string()));
+        iss.insert(Issuer::new(each.token_issuer.as_str()).unwrap_or(Issuer::new("http://localhost:3000").unwrap()));
+        let aud = Audiences::from(each.client_ids.iter().flat_map(|id| ClientId::new(id.as_str())));
         let validation_options = ValidationOptions {
           allowed_issuers: Some(iss),
           allowed_audiences: Some(aud),
@@ -91,7 +93,7 @@ where
       if let Some(validation_keys) = validation_keys.as_ref() {
         let res = validation_keys
           .iter()
-          .map(|vk| vk.validate(id_token, &each.validation_options))
+          .map(|vk| vk.validate(&id_token.try_into()?, &each.validation_options))
           .filter_map(|res| {
             if res.as_ref().is_err() {
               debug!("Failed to validate id token: {}", res.as_ref().err().unwrap());

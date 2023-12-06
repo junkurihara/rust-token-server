@@ -1,15 +1,18 @@
 use super::{verify_url, ClapSubCommand};
 use crate::{
-  constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_ALGORITHM, DEFAULT_PORT},
-  entity::*,
+  constants::{DB_FILE_PATH, DEFAULT_ADDRESS, DEFAULT_PORT},
   error::*,
-  jwt::{Algorithm, AlgorithmType, JwtKeyPair},
   state::{AppState, CryptoState, TableState},
   table::setup_sqlite,
 };
 use async_trait::async_trait;
 use clap::{Arg, ArgMatches, Command};
-use std::{fs, net::SocketAddr, str::FromStr};
+use std::{fs, net::SocketAddr};
+
+use libcommon::{
+  token_fields::{Audiences, Issuer, TryNewField},
+  SigningKey,
+};
 
 pub(super) struct Run {}
 
@@ -58,21 +61,6 @@ impl ClapSubCommand for Run {
           .help("Signing key file path"),
       )
       .arg(
-        Arg::new("signing_algorithm")
-          .short('a')
-          .long("signing-algorithm")
-          .value_name("ALGORITHM")
-          .default_value(DEFAULT_ALGORITHM)
-          .help("Signing algorithm of JWT like \"ES256\""),
-      )
-      .arg(
-        Arg::new("with_key_id")
-          .short('i')
-          .long("with-key-id")
-          .action(clap::ArgAction::SetTrue)
-          .help("Include key id in JWT"),
-      )
-      .arg(
         Arg::new("db_file_path")
           .short('d')
           .long("db-file-path")
@@ -91,26 +79,10 @@ impl ClapSubCommand for Run {
     };
     let listen_socket = format!("{}:{}", address, port).parse::<SocketAddr>()?;
 
-    let algorithm: Algorithm = match sub_m.get_one::<String>("signing_algorithm") {
-      Some(a) => match Algorithm::from_str(a) {
-        Ok(ao) => ao,
-        Err(_) => {
-          bail!("Given algorithm not supported");
-        }
-      },
-      None => {
-        bail!("Algorithm must be specified");
-      }
-    };
-
-    let with_key_id = sub_m.get_flag("with_key_id");
-    let keypair: JwtKeyPair = match sub_m.get_one::<String>("signing_key_path") {
+    let signing_key: SigningKey = match sub_m.get_one::<String>("signing_key_path") {
       Some(p) => {
         if let Ok(content) = fs::read_to_string(p) {
-          match algorithm.get_type() {
-            AlgorithmType::Ec | AlgorithmType::Okp => JwtKeyPair::new(&algorithm, &content, with_key_id)?,
-            // _ => bail!("Unsupported"),
-          }
+          SigningKey::from_pem(&content)?
         } else {
           bail!("Failed to read private key");
         }
@@ -144,8 +116,7 @@ impl ClapSubCommand for Run {
     Ok(Some(AppState {
       listen_socket,
       crypto: CryptoState {
-        algorithm,
-        keypair,
+        signing_key,
         issuer,
         audiences,
       },

@@ -31,10 +31,8 @@ pub const ARGON2_CONFIG: Config = Config {
 pub const ARGON2_SALT_LEN: usize = 32;
 
 // ID Token settings
-pub const DEFAULT_ALGORITHM: &str = "ES256";
-// TODO: Clapで設定できるように
-pub const JWT_DURATION_MINS: usize = 30;
-// Default client ID if no client id check is required
+/// Default client ID if no client id check is required
 pub const DEFAUTL_CLIENT_ID: &str = "none";
-pub const REFRESH_TOKEN_LEN: usize = 256;
-pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60; // TODO: 30days, clapで設定できるように
+/// Default duration of refresh token validity in minutes
+/// TODO: 30days, clapで設定できるように
+pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60;

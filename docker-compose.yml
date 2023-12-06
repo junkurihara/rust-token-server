@@ -1,11 +1,13 @@
-version: "3"
+version: "3.9"
 services:
   token-server:
     image: jqtype/token-server:latest
     container_name: token-server
     build:
-      context: ../
-      dockerfile: ./server/Dockerfile
+      context: .
+      dockerfile: ./Dockerfile
+      platforms:
+        - linux/arm64
     restart: unless-stopped
     env_file: .env
     ports:
@@ -18,8 +20,8 @@ services:
       - ${SIGNING_KEY_PATH}:/opt/token-server/etc/private_key.pem
       - ${DATA_DIR_PATH}:/opt/token-server/var/
       - ${LOG_DIR}:/var/log/token-server/
-    networks:
-      net-front:
+    # networks:
+    # net-front:
 
   # watchtower:
   #   image: containrrr/watchtower
@@ -27,6 +29,6 @@ services:
   #   command: dnscrypt-server --interval 30
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock
-networks:
-  net-front:
-    # external: true
+# networks:
+# net-front:
+# external: true

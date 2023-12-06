@@ -1,6 +1,6 @@
-.github/
-.vscode/
-.private/
 target/
-log/
+.private/
+.github/
+.git/
+.vscode/
 obsolete/

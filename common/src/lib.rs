@@ -1,5 +1,8 @@
-mod token_outer;
+mod claim;
+mod constants;
+mod token;
 mod validation_key;
 
-pub use token_outer::{TokenMeta, TokenOuter};
-pub use validation_key::{Claims, ValidationKey, ValidationOptions};
+pub mod token_fields;
+pub use token::{TokenBody, TokenMeta};
+pub use validation_key::{Claims, SigningKey, ValidationKey, ValidationOptions};
