@@ -17,6 +17,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Run unit tests for rust-token-server-common
+        run: |
+          cargo test --verbose --package rust-token-server-common
 
       - name: Run unit tests for rust-token-server
         run: |
