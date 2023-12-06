@@ -5,9 +5,12 @@ mod log;
 mod message;
 // mod token;
 
-pub use auth::{TokenClient, TokenHttpClient};
-// pub use token::{Algorithm, TokenInner, TokenMeta, VerificationKeyType};
 use url::Url;
+
+pub use auth::{TokenClient, TokenHttpClient};
+pub mod token {
+  pub use libcommon::*;
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct AuthenticationConfig {
