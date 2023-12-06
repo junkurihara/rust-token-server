@@ -36,7 +36,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          file: ./server/Dockerfile
+          file: ./Dockerfile
 
       - name: Nightly build and push x86_64
         if: ${{ github.ref_name == 'develop' }}
@@ -46,4 +46,4 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:nightly
-          file: ./server/Dockerfile
+          file: ./Dockerfile
