@@ -5,6 +5,8 @@ use sqlx::sqlite::SqlitePool;
 use std::convert::{From, TryInto};
 use validator::Validate;
 
+use libcommon::token_fields::{Field, SubscriberId, TryNewField};
+
 #[derive(Debug, Clone)]
 pub struct SqliteUserTable {
   pool: SqlitePool,

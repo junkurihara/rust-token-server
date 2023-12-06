@@ -1,7 +1,7 @@
 use super::{request::TokensRequest, response::TokensResponse};
 use crate::{
   constants::DEFAUTL_CLIENT_ID,
-  entity::{ClientId, Entity, RefreshToken, TryNewEntity},
+  entity::{Entity, RefreshTokenInfo},
   log::*,
   state::AppState,
   table::{UserSearchKey, UserTable},
@@ -14,6 +14,8 @@ use axum::{
 };
 use serde_json::json;
 use std::sync::Arc;
+
+use libcommon::token_fields::{ClientId, Field, TryNewField};
 
 #[derive(Debug)]
 pub enum GetTokensError {
@@ -49,7 +51,7 @@ pub async fn get_tokens(
   let (username, password) = (input.auth.username, input.auth.password);
 
   // check user existence
-  let Ok(user) = state.table.user.find_user(UserSearchKey::Username(&username)).await else{
+  let Ok(user) = state.table.user.find_user(UserSearchKey::Username(&username)).await else {
     return Err(GetTokensError::TokenCreationFailed);
   };
   let Some(user) = user else {
@@ -84,13 +86,13 @@ pub async fn get_tokens(
 
   // generate id_token with refresh token
   let Ok(token) = state.crypto.generate_token(&user, &client_id, true) else {
-    return Err(GetTokensError::TokenCreationFailed)
+    return Err(GetTokensError::TokenCreationFailed);
   };
 
   // Record refresh token to db
-  let Ok(refresh) = RefreshToken::try_from(&token) else {
+  let Ok(refresh) = RefreshTokenInfo::try_from(&token.body) else {
     error!("Failed to retrieve refresh token from token struct");
-    return Err(GetTokensError::TokenCreationFailed)
+    return Err(GetTokensError::TokenCreationFailed);
   };
   if state.table.refresh_token.add_and_prune(&refresh).await.is_err() {
     error!("Failed to store refresh token");
@@ -98,7 +100,7 @@ pub async fn get_tokens(
   };
 
   Ok(Json(TokensResponse {
-    token: token.inner,
+    token: token.body,
     metadata: token.meta,
     message: "ok. login.".to_string(),
   }))

@@ -3,10 +3,10 @@ mod constants;
 mod error;
 mod log;
 mod message;
-mod token;
+// mod token;
 
 pub use auth::{TokenClient, TokenHttpClient};
-pub use token::{Algorithm, TokenInner, TokenMeta, VerificationKeyType};
+// pub use token::{Algorithm, TokenInner, TokenMeta, VerificationKeyType};
 use url::Url;
 
 #[derive(PartialEq, Eq, Debug, Clone)]

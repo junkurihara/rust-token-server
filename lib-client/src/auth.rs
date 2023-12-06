@@ -1,20 +1,14 @@
-use crate::{
-  constants::*,
-  error::*,
-  log::*,
-  message::*,
-  token::{Algorithm, TokenInner, VerificationKeyType},
-  AuthenticationConfig,
-};
+use crate::{constants::*, error::*, log::*, message::*, AuthenticationConfig};
+use anyhow::anyhow;
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
 use chrono::Local;
-use jwt_simple::prelude::{ES256PublicKey, Ed25519PublicKey, JWTClaims, NoCustomClaims};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use libcommon::{
+  token_fields::{Field, RefreshToken},
+  Claims, TokenBody, ValidationKey,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
   marker::{Send, Sync},
-  str::FromStr,
   sync::Arc,
 };
 use tokio::sync::RwLock;
@@ -41,9 +35,9 @@ where
 {
   config: AuthenticationConfig,
   http_client: Arc<RwLock<H>>,
-  id_token: Arc<RwLock<Option<TokenInner>>>,
-  refresh_token: Arc<RwLock<Option<String>>>,
-  validation_key: Arc<RwLock<Option<VerificationKeyType>>>,
+  id_token: Arc<RwLock<Option<TokenBody>>>,
+  refresh_token: Arc<RwLock<Option<RefreshToken>>>,
+  validation_key: Arc<RwLock<Option<ValidationKey>>>,
 }
 
 impl<H> TokenClient<H>
@@ -123,7 +117,7 @@ where
       .push(ENDPOINT_REFRESH_PATH);
 
     let json_request = RefreshRequest {
-      refresh_token: refresh_token.clone(),
+      refresh_token: refresh_token.into_string(),
       client_id: Some(self.config.client_id.clone()),
     };
 
@@ -163,10 +157,13 @@ where
     let Some(id_token) = id_token_lock.as_ref() else {
       bail!(AuthError::NoIdToken);
     };
-    let meta = id_token.decode_id_token().await?;
+    let meta = id_token.decode_id_token()?;
+    let key_id = meta
+      .header()
+      .key_id
+      .clone()
+      .ok_or_else(|| AuthError::NoKeyIdInIdToken)?;
     drop(id_token_lock);
-
-    let key_id = meta.key_id().ok_or_else(|| AuthError::NoKeyIdInIdToken)?;
 
     let mut jwks_endpoint = self.config.token_api.clone();
     jwks_endpoint
@@ -198,31 +195,11 @@ where
     };
     debug!("Matched JWK given at jwks endpoint is {}", &jwk_string);
 
-    let Some(crv) = matched_jwk.get("crv") else {
-      bail!(AuthError::InvalidJwk);
-    };
-    let crv = crv.as_str().unwrap_or("");
-
-    let verification_key = match Algorithm::from_str(meta.algorithm())? {
-      Algorithm::ES256 => {
-        ensure!(crv == "P-256", AuthError::InvalidJwk);
-        let pk = p256::PublicKey::from_jwk_str(&jwk_string)?;
-        let sec1key = pk.to_encoded_point(false);
-        VerificationKeyType::ES256(ES256PublicKey::from_bytes(sec1key.as_bytes())?)
-      }
-      Algorithm::Ed25519 => {
-        ensure!(crv == "Ed25519", AuthError::InvalidJwk);
-        let Some(x) = matched_jwk.get("x") else {
-          bail!(AuthError::InvalidJwk);
-        };
-        let x = x.as_str().unwrap_or("");
-        let x = general_purpose::URL_SAFE_NO_PAD.decode(x)?;
-        VerificationKeyType::Ed25519(Ed25519PublicKey::from_bytes(x.as_slice())?)
-      }
-    };
+    let jwk_value = serde_json::to_value(matched_jwk)?;
+    let validation_key = ValidationKey::from_jwk(&jwk_value)?;
 
     let mut validation_key_lock = self.validation_key.write().await;
-    validation_key_lock.replace(verification_key);
+    validation_key_lock.replace(validation_key);
     drop(validation_key_lock);
 
     info!("validation key updated");
@@ -231,14 +208,7 @@ where
   }
 
   /// Verify id token
-  async fn verify_id_token(&self) -> Result<JWTClaims<NoCustomClaims>> {
-    let vk_lock = self.validation_key.read().await;
-    let Some(vk) = vk_lock.as_ref() else {
-      bail!(AuthError::NoValidationKey);
-    };
-    let verification_key = vk.to_owned();
-    drop(vk_lock);
-
+  async fn verify_id_token(&self) -> Result<Claims> {
     let token_lock = self.id_token.read().await;
     let Some(token_inner) = token_lock.as_ref() else {
       bail!(AuthError::NoIdToken);
@@ -246,26 +216,39 @@ where
     let token = token_inner.clone();
     drop(token_lock);
 
-    token.verify_id_token(&verification_key, &self.config).await
+    let vk_lock = self.validation_key.read().await;
+    let Some(vk) = vk_lock.as_ref() else {
+      bail!(AuthError::NoValidationKey);
+    };
+    let validation_key = vk.to_owned();
+    // drop(vk_lock);
+
+    token
+      .verify_id_token(validation_key, &self.config.client_id, self.config.token_api.as_str())
+      .await
   }
 
   /// Remaining seconds until expiration of id token
   pub async fn remaining_seconds_until_expiration(&self) -> Result<i64> {
     // These return unix time in secs
     let clm = self.verify_id_token().await?;
-    let expires_at: i64 = clm.expires_at.unwrap().as_secs() as i64;
+    let expires_at = clm
+      .expiration
+      .map(|v| v.timestamp())
+      .ok_or(anyhow!("No expiration in id token"))?;
+
     let current = Local::now().timestamp();
 
     Ok(expires_at - current)
   }
 
   /// Get id and refresh tokens with some meta data
-  pub async fn token(&self) -> Result<TokenInner> {
+  pub async fn token(&self) -> Result<TokenBody> {
     let token_lock = self.id_token.read().await;
-    let Some(token_inner) = token_lock.as_ref() else {
+    let Some(token) = token_lock.as_ref() else {
       bail!(AuthError::NoIdToken);
     };
-    let token = token_inner.clone();
+    let token = token.clone();
     drop(token_lock);
 
     Ok(token)

@@ -78,8 +78,6 @@ Options:
   -t, --token-issuer <URL>             Issuer of Id token specified as URL like "https://example.com/issue"
   -c, --client-ids <IDs>               Client ids allowed to connect the API server, split with comma like 'AAAA,BBBBB,CCCC'. If not specified, any client can be connected.
   -s, --signing-key-path <PATH>        Signing key file path
-  -a, --signing-algorithm <ALGORITHM>  Signing algorithm of JWT like "ES256" [default: ES256]
-  -i, --with-key-id                    Include key id in JWT
   -d, --db-file-path <PATH>            SQLite database file path [default: ./users.db]
   -h, --help                           Print help
 ```

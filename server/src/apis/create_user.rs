@@ -13,6 +13,8 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
+use libcommon::token_fields::{IdToken, SubscriberId, TryNewField};
+
 #[derive(Debug)]
 pub enum CreateUserError {
   UserCreationFailed,
@@ -58,12 +60,17 @@ pub async fn create_user(
   };
 
   // is_admin must be true here
-  if !claims.custom.is_admin {
+  if !claims.custom.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false) {
     return Err(CreateUserError::UnauthorizedUser);
   }
 
   // just in case, check user existence
-  let Some(Ok(sub)) = claims.subject.map(SubscriberId::new) else {
+  let Some(Ok(sub)) = claims
+    .custom
+    .get("subscriber_id")
+    .and_then(|v| v.as_str())
+    .map(SubscriberId::new)
+  else {
     return Err(CreateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {

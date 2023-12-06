@@ -5,6 +5,8 @@ use chrono::TimeZone;
 use sqlx::sqlite::SqlitePool;
 use std::convert::TryInto;
 
+use libcommon::token_fields::{ClientId, Field, RefreshToken, SubscriberId, TryNewField};
+
 #[derive(Debug, Clone)]
 pub struct SqliteRefreshTokenTable {
   pool: SqlitePool,
@@ -15,7 +17,7 @@ impl SqliteRefreshTokenTable {
     Self { pool }
   }
 
-  pub async fn add_and_prune<'a>(&self, refresh_token: &'a RefreshToken) -> Result<()> {
+  pub async fn add_and_prune<'a>(&self, refresh_token: &'a RefreshTokenInfo) -> Result<()> {
     self.add(refresh_token).await?;
     self.prune_expired().await?;
     Ok(())
@@ -23,9 +25,9 @@ impl SqliteRefreshTokenTable {
 
   pub async fn prune_and_find<'a>(
     &self,
-    refresh_token_string: &'a RefreshTokenInner,
+    refresh_token_string: &'a RefreshToken,
     client_id: &'a ClientId,
-  ) -> Result<Option<RefreshToken>> {
+  ) -> Result<Option<RefreshTokenInfo>> {
     self.prune_expired().await?;
     self.find_refresh_token(refresh_token_string, client_id).await
   }
@@ -33,7 +35,7 @@ impl SqliteRefreshTokenTable {
 
 #[async_trait]
 impl RefreshTokenTable for SqliteRefreshTokenTable {
-  async fn add<'a>(&self, refresh_token: &'a RefreshToken) -> Result<()> {
+  async fn add<'a>(&self, refresh_token: &'a RefreshTokenInfo) -> Result<()> {
     let sql = format!(
       "insert into {} (subscriber_id, client_id, refresh_token, expires) VALUES (?, ?, ?, ?)",
       REFRESH_TOKEN_TABLE_NAME
@@ -50,9 +52,9 @@ impl RefreshTokenTable for SqliteRefreshTokenTable {
 
   async fn find_refresh_token<'a>(
     &self,
-    refresh_token_string: &'a RefreshTokenInner,
+    refresh_token_string: &'a RefreshToken,
     client_id: &'a ClientId,
-  ) -> Result<Option<RefreshToken>> {
+  ) -> Result<Option<RefreshTokenInfo>> {
     let current = chrono::Local::now().timestamp();
     let sql = format!(
       "select * from {} where client_id='{}' and refresh_token='{}' and expires>{}",
@@ -63,7 +65,7 @@ impl RefreshTokenTable for SqliteRefreshTokenTable {
     );
     let refresh_token_row_opt: Option<RefreshTokenRow> = sqlx::query_as(&sql).fetch_optional(&self.pool).await?;
     if let Some(refresh_token_row) = refresh_token_row_opt {
-      let refresh_token: RefreshToken = refresh_token_row.try_into()?;
+      let refresh_token: RefreshTokenInfo = refresh_token_row.try_into()?;
       Ok(Some(refresh_token))
     } else {
       Ok(None)
@@ -87,17 +89,17 @@ struct RefreshTokenRow {
   expires: i64,
 }
 
-impl TryInto<RefreshToken> for RefreshTokenRow {
+impl TryInto<RefreshTokenInfo> for RefreshTokenRow {
   type Error = crate::error::Error;
 
-  fn try_into(self) -> std::result::Result<RefreshToken, Self::Error> {
+  fn try_into(self) -> std::result::Result<RefreshTokenInfo, Self::Error> {
     let Some(expires) = chrono::Local.timestamp_opt(self.expires, 0).single() else {
       return Err(anyhow!("Invalid timestamp"));
     };
-    let res = RefreshToken {
+    let res = RefreshTokenInfo {
       subscriber_id: SubscriberId::new(self.subscriber_id)?,
       client_id: ClientId::new(self.client_id)?,
-      inner: RefreshTokenInner::new(self.inner.as_str())?,
+      inner: RefreshToken::new(self.inner.as_str())?,
       expires,
     };
     Ok(res)

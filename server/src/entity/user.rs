@@ -1,12 +1,14 @@
-use super::{EncodedHash, Entity, Password, SubscriberId, TryNewEntity, Username};
+use super::{EncodedHash, Entity, Password, TryNewEntity, Username};
 use crate::{
   constants::{ADMIN_USERNAME, PASSWORD_LEN},
   error::*,
   log::*,
 };
-use rand::prelude::*;
+use rand::seq::SliceRandom;
 use serde::Serialize;
 use uuid::Uuid;
+
+use libcommon::token_fields::{Field, SubscriberId, TryNewField};
 
 #[derive(Debug, Clone)]
 pub struct IsAdmin {

@@ -3,13 +3,15 @@ mod user_table;
 
 use crate::{
   constants::{ADMIN_PASSWORD_VAR, ADMIN_USERNAME},
-  entity::*,
+  entity::{Password, RefreshTokenInfo, TryNewEntity, User, Username},
   error::*,
   log::*,
 };
 use async_trait::async_trait;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, str::FromStr};
+
+use libcommon::token_fields::{ClientId, RefreshToken, SubscriberId};
 
 pub use refresh_table::SqliteRefreshTokenTable;
 pub use user_table::SqliteUserTable;
@@ -34,12 +36,12 @@ pub trait UserTable {
 
 #[async_trait]
 pub trait RefreshTokenTable {
-  async fn add<'a>(&self, refresh_token: &'a RefreshToken) -> Result<()>;
+  async fn add<'a>(&self, refresh_token: &'a RefreshTokenInfo) -> Result<()>;
   async fn find_refresh_token<'a>(
     &self,
-    refresh_token_string: &'a RefreshTokenInner,
+    refresh_token_string: &'a RefreshToken,
     client_id: &'a ClientId,
-  ) -> Result<Option<RefreshToken>>;
+  ) -> Result<Option<RefreshTokenInfo>>;
   async fn prune_expired(&self) -> Result<()>;
 }
 

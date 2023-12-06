@@ -30,7 +30,7 @@ impl IntoResponse for JwksError {
 }
 
 pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<Json<Jwks>, JwksError> {
-  let Ok(current_public_jwk) = state.crypto.keypair.public_jwk() else {
+  let Ok(current_public_jwk) = state.crypto.signing_key.validation_key().to_jwk() else {
     return Err(JwksError::InvalidPublicKeys);
   };
 

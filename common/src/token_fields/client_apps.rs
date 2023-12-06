@@ -1,4 +1,5 @@
-use crate::error::*;
+use super::{Field, TryNewField};
+use anyhow::Result;
 use serde::{
   de::{self, Visitor},
   ser::SerializeSeq,
@@ -7,8 +8,6 @@ use serde::{
 use std::{borrow::Cow, collections::HashSet, convert::From};
 use validator::Validate;
 
-use super::{Entity, TryNewEntity};
-
 #[derive(Debug, Clone, Eq, PartialEq, Validate, Hash)]
 /// Client ID meaning an identifier of client application allowed
 /// to connect the token server.
@@ -16,7 +15,7 @@ pub struct ClientId {
   #[validate(length(min = 1))]
   value: String,
 }
-impl<'a, T> TryNewEntity<T> for ClientId
+impl<'a, T> TryNewField<T> for ClientId
 where
   T: Into<Cow<'a, str>>,
 {
@@ -28,7 +27,7 @@ where
     Ok(object)
   }
 }
-impl Entity for ClientId {
+impl Field for ClientId {
   fn as_str(&self) -> &str {
     &self.value
   }
@@ -79,7 +78,7 @@ impl<'de> Deserialize<'de> for ClientId {
 pub struct Audiences {
   value: HashSet<ClientId>,
 }
-impl<'a, T> TryNewEntity<T> for Audiences
+impl<'a, T> TryNewField<T> for Audiences
 where
   T: Into<Cow<'a, str>>,
 {
@@ -122,6 +121,35 @@ impl Serialize for Audiences {
       seq.serialize_element(&element)?;
     }
     seq.end()
+  }
+}
+impl<'de> Deserialize<'de> for Audiences {
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    struct AudiencesVisitor;
+    impl<'de> Visitor<'de> for AudiencesVisitor {
+      type Value = HashSet<ClientId>;
+      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("audiences hashset of string")
+      }
+
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+        A: de::SeqAccess<'de>,
+      {
+        let mut hs = HashSet::new();
+        while let Some(element) = seq.next_element::<String>()? {
+          hs.insert(ClientId::new(element).unwrap());
+        }
+        Ok(hs)
+      }
+    }
+
+    let value = deserializer.deserialize_seq(AudiencesVisitor)?;
+
+    Ok(Self { value })
   }
 }
 impl<T> From<T> for Audiences

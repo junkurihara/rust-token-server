@@ -1,7 +1,6 @@
 use super::{request::UpdateUserRequest, response::MessageResponse};
 use crate::{
   constants::ADMIN_USERNAME,
-  entity::*,
   state::AppState,
   table::{UserSearchKey, UserTable},
 };
@@ -13,6 +12,8 @@ use axum::{
 };
 use serde_json::json;
 use std::sync::Arc;
+
+use libcommon::token_fields::{IdToken, SubscriberId, TryNewField};
 
 #[derive(Debug)]
 pub enum UpdateUserError {
@@ -64,7 +65,12 @@ pub async fn update_user(
   };
 
   // just in case, check user existence
-  let Some(Ok(sub)) = claims.subject.map(SubscriberId::new) else {
+  let Some(Ok(sub)) = claims
+    .custom
+    .get("subscriber_id")
+    .and_then(|v| v.as_str())
+    .map(SubscriberId::new)
+  else {
     return Err(UpdateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {
@@ -83,9 +89,10 @@ pub async fn update_user(
     .table
     .user
     .update_user(&sub, request.auth.username.as_ref(), request.auth.password.as_ref())
-    .await else {
-      return Err(UpdateUserError::UserUpdateFailed);
-    };
+    .await
+  else {
+    return Err(UpdateUserError::UserUpdateFailed);
+  };
 
   Ok(Json(MessageResponse {
     message: "ok. updated the user.".to_string(),
