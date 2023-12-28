@@ -14,21 +14,21 @@ publish = false
 [dependencies]
 libcommon = { path = "../common", package = "rust-token-server-common" }
 
-anyhow = "1.0.75"
+anyhow = "1.0.77"
 tracing = "0.1.40"
-async-trait = "0.1.74"
-thiserror = "1.0.50"
+async-trait = "0.1.75"
+thiserror = "1.0.52"
 url = "2.5.0"
 serde_json = "1.0.108"
-futures = { version = "0.3.29", default-features = false, features = ["std"] }
-tokio = { version = "1.34.0", default-features = false, features = [
+futures = { version = "0.3.30", default-features = false, features = ["std"] }
+tokio = { version = "1.35.1", default-features = false, features = [
   "net",
   "macros",
 ] }
 serde = { version = "1.0.193", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
-reqwest = { version = "0.11.22", default-features = false, features = [
+reqwest = { version = "0.11.23", default-features = false, features = [
   "json",
   "trust-dns",
   "default",
