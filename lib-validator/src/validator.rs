@@ -96,7 +96,10 @@ where
           .map(|vk| vk.validate(&id_token.try_into()?, &each.validation_options))
           .filter_map(|res| {
             if res.as_ref().is_err() {
-              debug!("Failed to validate id token: {}", res.as_ref().err().unwrap());
+              debug!(
+                "(Validation key likely mismatched with token) failed to validate id token: {}",
+                res.as_ref().err().unwrap()
+              );
             }
             res.ok()
           })

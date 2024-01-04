@@ -12,10 +12,10 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.193", default-features = false, features = ["derive"] }
-serde_json = "1.0.108"
+serde = { version = "1.0.194", default-features = false, features = ["derive"] }
+serde_json = "1.0.110"
 jwt-compact = { version = "0.8.0", features = ["p256", "ed25519-compact"] }
-anyhow = "1.0.75"
+anyhow = "1.0.79"
 chrono = { version = "0.4.31", default-features = false }
 validator = { version = "0.16", features = ["derive"] }
 rand = "0.8.5"
@@ -24,5 +24,5 @@ tracing = "0.1.40"
 pkcs8 = { version = "0.10.2", default-features = false, features = ["pem"] }
 spki = { version = "0.7.3", default-features = false, features = ["pem"] }
 sec1 = { version = "0.7.3", default-features = false }
-ed25519-compact = "2.0.4"
+ed25519-compact = "2.0.6"
 sha2 = "0.10.8"
