@@ -88,6 +88,7 @@ Password was automatically generated for the user of name "{}". Keep this secure
   pub fn username(&self) -> &str {
     self.username.as_str()
   }
+  #[allow(dead_code)]
   pub fn subscriber_id(&self) -> &str {
     self.subscriber_id.as_str()
   }

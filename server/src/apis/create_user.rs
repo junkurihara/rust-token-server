@@ -60,17 +60,13 @@ pub async fn create_user(
   };
 
   // is_admin must be true here
-  if !claims.custom.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false) {
+  if !claims.custom.get("iad").and_then(|v| v.as_bool()).unwrap_or(false) {
     return Err(CreateUserError::UnauthorizedUser);
   }
 
   // just in case, check user existence
-  let Some(Ok(sub)) = claims
-    .custom
-    .get("subscriber_id")
-    .and_then(|v| v.as_str())
-    .map(SubscriberId::new)
-  else {
+  let Some(Ok(sub)) = claims.custom.get("sub").and_then(|v| v.as_str()).map(SubscriberId::new) else {
+    println!("invalid token: {:?}", claims);
     return Err(CreateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {
