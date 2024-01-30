@@ -30,10 +30,7 @@ impl IntoResponse for UpdateUserError {
       UpdateUserError::UnauthorizedUser => (StatusCode::UNAUTHORIZED, "Unauthorized"),
       UpdateUserError::MissingToken => (StatusCode::UNAUTHORIZED, "Missing token"),
       UpdateUserError::InvalidToken => (StatusCode::BAD_REQUEST, "Invalid token"),
-      UpdateUserError::ChangeAdminNameProhibited => (
-        StatusCode::BAD_REQUEST,
-        "Changing the admin name 'admin' is not allowed.",
-      ),
+      UpdateUserError::ChangeAdminNameProhibited => (StatusCode::BAD_REQUEST, "Changing the admin name 'admin' is not allowed."),
     };
     let body = Json(json!({
         "error": error_message,
@@ -65,12 +62,7 @@ pub async fn update_user(
   };
 
   // just in case, check user existence
-  let Some(Ok(sub)) = claims
-    .custom
-    .get("subscriber_id")
-    .and_then(|v| v.as_str())
-    .map(SubscriberId::new)
-  else {
+  let Some(Ok(sub)) = claims.custom.get("sub").and_then(|v| v.as_str()).map(SubscriberId::new) else {
     return Err(UpdateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {
