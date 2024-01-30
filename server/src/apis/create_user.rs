@@ -66,7 +66,6 @@ pub async fn create_user(
 
   // just in case, check user existence
   let Some(Ok(sub)) = claims.custom.get("sub").and_then(|v| v.as_str()).map(SubscriberId::new) else {
-    println!("invalid token: {:?}", claims);
     return Err(CreateUserError::InvalidToken);
   };
   let Ok(opt) = state.table.user.find_user(UserSearchKey::SubscriberId(&sub)).await else {
