@@ -38,7 +38,7 @@ impl RefreshToken {
   pub fn generate() -> Result<Self> {
     let value: String = thread_rng()
       .sample_iter(&Alphanumeric)
-      .take(REFRESH_TOKEN_LEN)
+      .take(REFRESH_TOKEN_LEN as usize)
       .map(char::from)
       .collect();
     let object = Self { value };

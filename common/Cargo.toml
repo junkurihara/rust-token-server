@@ -17,7 +17,7 @@ serde_json = "1.0.117"
 jwt-compact = { version = "0.8.0", features = ["p256", "ed25519-compact"] }
 anyhow = "1.0.86"
 chrono = { version = "0.4.38", default-features = false }
-validator = { version = "0.16.1", features = ["derive"] }
+validator = { version = "0.18.1", features = ["derive"] }
 rand = "0.8.5"
 base64 = "0.22.1"
 tracing = "0.1.40"

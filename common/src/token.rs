@@ -38,12 +38,7 @@ impl TokenBody {
   }
 
   /// Verify id token with key string
-  pub async fn verify_id_token(
-    &self,
-    validation_key: &ValidationKey,
-    client_id: &str,
-    token_api: &str,
-  ) -> Result<Claims> {
+  pub async fn verify_id_token(&self, validation_key: &ValidationKey, client_id: &str, token_api: &str) -> Result<Claims> {
     let options = ValidationOptions {
       allowed_audiences: Some(Audiences::new(client_id)?),
       allowed_issuers: Some(HashSet::from([Issuer::new(token_api)?])),
@@ -129,24 +124,15 @@ mod tests {
     assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
     assert_eq!(token_inner.allowed_apps, Audiences::new("client_id1").unwrap());
     assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
-    assert_eq!(
-      token_inner.subscriber_id.as_str(),
-      "69f50ffb-3556-446e-9a30-af86a2a66007"
-    );
+    assert_eq!(token_inner.subscriber_id.as_str(), "69f50ffb-3556-446e-9a30-af86a2a66007");
 
     let token_inner = TokenBody::new(&test_vector, false).expect("Token inner is invalid");
     assert!(token_inner.refresh.is_none());
     assert_eq!(&token_inner.issued_at, "2023-04-05 14:07:10 UTC");
     assert_eq!(&token_inner.expires, "2023-04-05 14:37:10 UTC");
-    assert_eq!(
-      token_inner.allowed_apps,
-      Audiences::new("client_id1".to_string()).unwrap()
-    );
+    assert_eq!(token_inner.allowed_apps, Audiences::new("client_id1".to_string()).unwrap());
     assert_eq!(token_inner.issuer.as_str(), "https://auth.example.com/v1.0");
-    assert_eq!(
-      token_inner.subscriber_id.as_str(),
-      "69f50ffb-3556-446e-9a30-af86a2a66007"
-    );
+    assert_eq!(token_inner.subscriber_id.as_str(), "69f50ffb-3556-446e-9a30-af86a2a66007");
   }
 
   #[test]
@@ -160,6 +146,6 @@ mod tests {
   #[test]
   fn test_refresh() {
     let refresh = RefreshToken::generate().expect("Refresh token creation failed");
-    assert_eq!(refresh.as_str().len(), REFRESH_TOKEN_LEN);
+    assert_eq!(refresh.as_str().len(), REFRESH_TOKEN_LEN as usize);
   }
 }
