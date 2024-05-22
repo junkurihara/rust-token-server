@@ -141,7 +141,7 @@ For example, you can call it as:
   http://localhost:8000/v1.0/create_user
 ```
 
-### Create an existing user under the administrator privilege
+### Delete an existing user under the administrator privilege
 
 ```url:
 http://<your_domain>:<your_port>/v1.0/delete_user
