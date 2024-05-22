@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 pub use anyhow::{anyhow, bail, ensure, Result};
 use thiserror::Error;
 

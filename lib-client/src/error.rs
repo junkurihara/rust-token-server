@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 pub use anyhow::{bail, ensure, Result};
 use thiserror::Error;
 
@@ -28,4 +29,6 @@ pub enum AuthError {
   NoRefreshToken,
   #[error("No validation key previously retrieved")]
   NoValidationKey,
+  #[error("Not allowed operation. Needs admin privilege")]
+  NotAllowed,
 }

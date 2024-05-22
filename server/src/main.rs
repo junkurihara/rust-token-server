@@ -11,7 +11,7 @@ mod table;
 
 // use crate::api_create_user::create_user;
 use crate::{
-  apis::{create_user, get_tokens, health_check, jwks, refresh, update_user},
+  apis::{create_user, delete_user, get_tokens, health_check, jwks, refresh, update_user},
   constants::*,
   error::*,
   log::*,
@@ -63,11 +63,10 @@ async fn define_route(shared_state: Arc<AppState>) {
     .route("/refresh", post(refresh))
     .route("/create_user", post(create_user))
     .route("/update_user", post(update_user))
+    .route("/delete_user", post(delete_user))
     .with_state(shared_state);
 
-  let router = Router::new()
-    .route("/health", get(health_check))
-    .nest("/v1.0", api_routes);
+  let router = Router::new().route("/health", get(health_check)).nest("/v1.0", api_routes);
 
   let server = axum::serve(tcp_listener, router);
 

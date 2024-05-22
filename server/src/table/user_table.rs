@@ -35,6 +35,17 @@ impl UserTable for SqliteUserTable {
     Ok(())
   }
 
+  async fn delete_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<()> {
+    let sql = match user_search_key {
+      UserSearchKey::SubscriberId(sub_id) => {
+        format!("delete from {} where subscriber_id=\"{}\"", USER_TABLE_NAME, sub_id.as_str())
+      }
+      UserSearchKey::Username(username) => format!("delete from {} where username=\"{}\"", USER_TABLE_NAME, username.as_str()),
+    };
+    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    Ok(())
+  }
+
   async fn update_user<'a>(
     &self,
     subscriber_id: &SubscriberId,
@@ -97,17 +108,11 @@ impl UserTable for SqliteUserTable {
 
   async fn find_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<Option<User>> {
     let sql = match user_search_key {
-      UserSearchKey::SubscriberId(sub_id) => format!(
-        "select * from {} where subscriber_id='{}'",
-        USER_TABLE_NAME,
-        sub_id.as_str()
-      ),
+      UserSearchKey::SubscriberId(sub_id) => {
+        format!("select * from {} where subscriber_id='{}'", USER_TABLE_NAME, sub_id.as_str())
+      }
       UserSearchKey::Username(username) => {
-        format!(
-          "select * from {} where username='{}'",
-          USER_TABLE_NAME,
-          username.as_str()
-        )
+        format!("select * from {} where username='{}'", USER_TABLE_NAME, username.as_str())
       }
     };
     let user_row_opt: Option<UserRow> = sqlx::query_as(&sql).fetch_optional(&self.pool).await?;
