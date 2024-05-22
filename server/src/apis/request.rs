@@ -40,3 +40,8 @@ pub struct DeleteUserRequest {
 pub struct UpdateUserRequest {
   pub auth: PasswordCredentialOptionalRequest,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ListUserRequest {
+  pub page: Option<u32>,
+}

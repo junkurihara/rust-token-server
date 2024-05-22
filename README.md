@@ -153,9 +153,27 @@ For example, you can call it as:
 % curl -i -X POST \
   -H "Authorization: Bearer <admin's jwt>" \
   -H "Content-Type: application/json" \
-  -d '{ "username": "<target_user_name>"}}' \
+  -d '{ "username": "<target_user_name>"}' \
   http://localhost:8000/v1.0/delete_user
 ```
+
+### List users under the administrator privilege
+
+```url:
+http://<your_domain>:<your_port>/v1.0/list_users
+```
+
+For example, you can call it as:
+
+```bash
+% curl -i -X POST \
+  -H "Authorization: Bearer <admin's jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{ "page": 1 }' \
+  http://localhost:8000/v1.0/list_users
+```
+
+The `page` can be omitted. If it is omitted, the first page is shown. Note that `page` must start from 1. The response message includes the total number of pages, and at most 20 users are shown in a page. In the response message, `username`, `subscriber_id` and `is_admin` are contained for each user.
 
 ### Update username and password
 
