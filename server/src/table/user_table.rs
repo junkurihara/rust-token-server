@@ -46,6 +46,35 @@ impl UserTable for SqliteUserTable {
     Ok(())
   }
 
+  async fn list_users(&self, page: u32) -> Result<(Vec<User>, u32)> {
+    if page == 0 {
+      bail!("Page number starts from 1");
+    }
+    let total_cnt = sqlx::query_scalar::<_, i64>(&format!("select count(*) from {}", USER_TABLE_NAME))
+      .fetch_one(&self.pool)
+      .await?;
+    let total_pages = (total_cnt as f64 / MAX_USERS_PER_PAGE as f64).ceil() as u32;
+
+    if page > total_pages {
+      bail!("Page number exceeds total pages");
+    }
+
+    let sql = format!(
+      "select * from {} order by username asc limit {} offset {}",
+      USER_TABLE_NAME,
+      MAX_USERS_PER_PAGE,
+      (page - 1) * MAX_USERS_PER_PAGE
+    );
+    let user_rows: Vec<UserRow> = sqlx::query_as(&sql).fetch_all(&self.pool).await?;
+
+    let users = user_rows
+      .into_iter()
+      .map(|row| row.try_into())
+      .collect::<Result<Vec<User>>>()?;
+
+    Ok((users, total_pages))
+  }
+
   async fn update_user<'a>(
     &self,
     subscriber_id: &SubscriberId,

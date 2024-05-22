@@ -36,3 +36,6 @@ pub const DEFAUTL_CLIENT_ID: &str = "none";
 /// Default duration of refresh token validity in minutes
 /// TODO: 30days, clapで設定できるように
 pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60;
+
+/// Maximum number of users per page in the list user API
+pub const MAX_USERS_PER_PAGE: u32 = 20;
