@@ -24,6 +24,7 @@ pub enum UserSearchKey<'a> {
 #[async_trait]
 pub trait UserTable {
   async fn add(&self, user: User) -> Result<()>;
+  async fn delete_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<()>;
   async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()>;
   async fn update_user<'a>(
     &self,

@@ -29,4 +29,6 @@ pub enum AuthError {
   NoRefreshToken,
   #[error("No validation key previously retrieved")]
   NoValidationKey,
+  #[error("Not allowed operation. Needs admin privilege")]
+  NotAllowed,
 }

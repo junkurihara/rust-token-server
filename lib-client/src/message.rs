@@ -36,3 +36,28 @@ pub(super) struct RefreshRequest {
   pub refresh_token: String,
   pub client_id: Option<String>,
 }
+
+/// Create user request
+#[derive(Serialize, Debug)]
+pub(super) struct CreateUserRequest {
+  pub auth: CreateUserReqInner,
+}
+#[derive(Serialize, Debug)]
+/// Create user request inner
+
+pub(super) struct CreateUserReqInner {
+  pub username: String,
+  pub password: String,
+}
+
+/// Delete user request
+#[derive(Serialize, Debug)]
+pub struct DeleteUserRequest {
+  pub username: String,
+}
+
+#[derive(Deserialize, Debug)]
+/// Create/delete user response
+pub(super) struct MessageResponse {
+  pub message: String,
+}

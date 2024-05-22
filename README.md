@@ -137,8 +137,24 @@ For example, you can call it as:
 % curl -i -X POST \
   -H "Authorization: Bearer <admin's jwt>" \
   -H "Content-Type: application/json" \
-  -d '{ "auth": {"username": ""<new_user_name>"", "password": "<new_user_password>"}}' \
+  -d '{ "auth": {"username": "<new_user_name>", "password": "<new_user_password>"}}' \
   http://localhost:8000/v1.0/create_user
+```
+
+### Create an existing user under the administrator privilege
+
+```url:
+http://<your_domain>:<your_port>/v1.0/delete_user
+```
+
+For example, you can call it as:
+
+```bash
+% curl -i -X POST \
+  -H "Authorization: Bearer <admin's jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{ "username": "<target_user_name>"}}' \
+  http://localhost:8000/v1.0/delete_user
 ```
 
 ### Update username and password
