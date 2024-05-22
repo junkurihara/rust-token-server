@@ -32,6 +32,11 @@ pub struct CreateUserRequest {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+pub struct DeleteUserRequest {
+  pub username: Username,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct UpdateUserRequest {
   pub auth: PasswordCredentialOptionalRequest,
 }

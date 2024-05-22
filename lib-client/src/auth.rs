@@ -28,6 +28,16 @@ pub trait TokenHttpClient {
     R: DeserializeOwned + Send + Sync;
 }
 
+/// Trait defining http client for post and get with id token header as admin
+#[async_trait]
+pub trait AdminTokenHttpClient: TokenHttpClient {
+  /// Send POST request with JSON body and get JSON response using admin id token
+  async fn post_json_admin<S, R>(&self, url: &Url, json_body: &S, token: &TokenBody) -> Result<R>
+  where
+    S: Serialize + Send + Sync,
+    R: DeserializeOwned + Send + Sync;
+}
+
 /// Token client
 pub struct TokenClient<H>
 where
@@ -158,11 +168,7 @@ where
       bail!(AuthError::NoIdToken);
     };
     let meta = id_token.decode_id_token()?;
-    let key_id = meta
-      .header()
-      .key_id
-      .clone()
-      .ok_or_else(|| AuthError::NoKeyIdInIdToken)?;
+    let key_id = meta.header().key_id.clone().ok_or_else(|| AuthError::NoKeyIdInIdToken)?;
     drop(id_token_lock);
 
     let mut jwks_endpoint = self.config.token_api.clone();
@@ -180,9 +186,7 @@ where
       kid == key_id
     });
     if matched_key.is_none() {
-      bail!(AuthError::NoJwkMatched {
-        kid: key_id.to_string()
-      });
+      bail!(AuthError::NoJwkMatched { kid: key_id.to_string() });
     }
 
     let mut matched = matched_key.unwrap().clone();
@@ -252,5 +256,75 @@ where
     drop(token_lock);
 
     Ok(token)
+  }
+
+  /// Check if myself is admin
+  pub async fn is_admin(&self) -> Result<bool> {
+    let clm = self.verify_id_token().await?;
+    let is_admin = clm.custom.get("iad").and_then(|v| v.as_bool()).unwrap_or(false);
+    Ok(is_admin)
+  }
+}
+
+/// Token client with admin privilege
+impl<H> TokenClient<H>
+where
+  H: AdminTokenHttpClient,
+{
+  /// Create a user under the admin privilege
+  pub async fn create_user(&self, username: &str, password: &str) -> Result<String> {
+    let is_admin = self.is_admin().await?;
+    if !is_admin {
+      bail!(AuthError::NotAllowed);
+    }
+
+    let mut create_endpoint = self.config.token_api.clone();
+    create_endpoint
+      .path_segments_mut()
+      .map_err(|_| AuthError::UrlError)?
+      .push(ENDPOINT_CREATE_USER_PATH);
+
+    let json_request = CreateUserRequest {
+      auth: CreateUserReqInner {
+        username: username.to_string(),
+        password: password.to_string(),
+      },
+    };
+    let token_body = self.token().await?;
+
+    let client_lock = self.http_client.read().await;
+    let _res = client_lock
+      .post_json_admin::<_, MessageResponse>(&create_endpoint, &json_request, &token_body)
+      .await?;
+    drop(client_lock);
+
+    Ok(_res.message)
+  }
+
+  /// Delete a user under the admin privilege
+  pub async fn delete_user(&self, username: &str) -> Result<String> {
+    let is_admin = self.is_admin().await?;
+    if !is_admin {
+      bail!(AuthError::NotAllowed);
+    }
+
+    let mut delete_endpoint = self.config.token_api.clone();
+    delete_endpoint
+      .path_segments_mut()
+      .map_err(|_| AuthError::UrlError)?
+      .push(ENDPOINT_DELETE_USER_PATH);
+
+    let json_request = DeleteUserRequest {
+      username: username.to_string(),
+    };
+    let token_body = self.token().await?;
+
+    let client_lock = self.http_client.read().await;
+    let _res = client_lock
+      .post_json_admin::<_, MessageResponse>(&delete_endpoint, &json_request, &token_body)
+      .await?;
+    drop(client_lock);
+
+    Ok(_res.message)
   }
 }
