@@ -46,7 +46,7 @@ impl UserTable for SqliteUserTable {
     Ok(())
   }
 
-  async fn list_users(&self, page: u32) -> Result<(Vec<User>, u32)> {
+  async fn list_users(&self, page: u32) -> Result<(Vec<User>, u32, u32)> {
     if page == 0 {
       bail!("Page number starts from 1");
     }
@@ -72,7 +72,7 @@ impl UserTable for SqliteUserTable {
       .map(|row| row.try_into())
       .collect::<Result<Vec<User>>>()?;
 
-    Ok((users, total_pages))
+    Ok((users, total_pages, total_cnt as u32))
   }
 
   async fn update_user<'a>(

@@ -17,6 +17,7 @@ pub struct ListUserResponse {
   pub users: Vec<ListUserResponseInner>,
   pub page: u32,
   pub total_pages: u32,
+  pub total_users: u32,
   pub message: String,
 }
 

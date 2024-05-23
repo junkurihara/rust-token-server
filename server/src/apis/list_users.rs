@@ -83,7 +83,7 @@ pub async fn list_users(
 
   let current_page = request.page.unwrap_or(1u32);
 
-  let Ok((users, total_pages)) = state.table.user.list_users(current_page).await else {
+  let Ok((users, total_pages, total_users)) = state.table.user.list_users(current_page).await else {
     return Err(ListUserError::UserListFailed);
   };
 
@@ -98,6 +98,7 @@ pub async fn list_users(
       .collect(),
     page: current_page,
     total_pages,
+    total_users,
     message: "Success".to_string(),
   }))
 }
