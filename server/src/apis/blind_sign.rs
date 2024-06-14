@@ -15,7 +15,10 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
-use libcommon::token_fields::{ClientId, Field, IdToken, SubscriberId, TryNewField};
+use libcommon::{
+  blind_sig::BlindedToken,
+  token_fields::{ClientId, Field, IdToken, SubscriberId, TryNewField},
+};
 
 #[derive(Debug)]
 pub enum BlindSignError {
@@ -116,7 +119,8 @@ pub async fn blind_sign(
     };
   }
 
-  let blinded_token = input.blinded_token;
+  let blinded_token = BlindedToken::new(&input.blinded_token_message.0, &input.blinded_token_options);
+
   // sign the blinded token
   let Ok(blind_signature) = state.blind_crypto.blind_sign(&blinded_token) else {
     return Err(BlindSignError::SignFailed);

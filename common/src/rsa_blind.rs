@@ -167,8 +167,17 @@ pub struct BlindResult {
 /// This includes the blinded message and blinding options sent towards the server from the client
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlindedToken {
-  blind_msg: blind_rsa_signatures::BlindedMessage,
-  blind_opts: BlindOptions,
+  pub blind_msg: blind_rsa_signatures::BlindedMessage,
+  pub blind_opts: BlindOptions,
+}
+
+impl BlindedToken {
+  pub fn new(blind_msg: &[u8], blind_opts: &BlindOptions) -> Self {
+    Self {
+      blind_msg: blind_rsa_signatures::BlindedMessage(blind_msg.to_vec()),
+      blind_opts: blind_opts.clone(),
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

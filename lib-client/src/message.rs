@@ -1,5 +1,5 @@
 use libcommon::{TokenBody, TokenMeta};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 /// Authentication request
 #[derive(Serialize, Debug)]
@@ -62,10 +62,26 @@ pub(super) struct MessageResponse {
 }
 
 #[cfg(feature = "blind-signatures")]
+use base64::{engine::general_purpose, Engine as _};
+
+#[cfg(feature = "blind-signatures")]
 /// Sign request for blind signatures
-#[derive(Serialize, Debug)]
+#[derive(Debug)]
 pub(super) struct BlindSignRequest {
   pub blinded_token: libcommon::blind_sig::BlindedToken,
+}
+#[cfg(feature = "blind-signatures")]
+impl Serialize for BlindSignRequest {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let mut state = serializer.serialize_struct("BlindSignRequest", 2)?;
+    let b64u_blind_msg = general_purpose::URL_SAFE_NO_PAD.encode(&self.blinded_token.blind_msg.0);
+    state.serialize_field("blinded_token_message", &b64u_blind_msg)?;
+    state.serialize_field("blinded_token_options", &self.blinded_token.blind_opts)?;
+    state.end()
+  }
 }
 
 #[cfg(feature = "blind-signatures")]
