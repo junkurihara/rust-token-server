@@ -11,6 +11,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use url::Url;
 
+#[cfg(feature = "blind-signatures")]
+use crate::constants::ENDPOINT_BLIND_JWKS_PATH;
+#[cfg(feature = "blind-signatures")]
+use libcommon::blind_sig::*;
+
 /// Trait defining http client for jwks retrieval
 #[async_trait]
 pub trait JwksHttpClient {
@@ -48,6 +53,10 @@ where
   pub(crate) validation_options: ValidationOptions,
   /// http client to fetch jwks
   jwks_http_client: Arc<H>,
+
+  #[cfg(feature = "blind-signatures")]
+  /// Blind validation key
+  pub(crate) blind_validation_keys: Arc<RwLock<Option<Vec<RsaPublicKey>>>>,
 }
 
 impl<H> TokenValidator<H>
@@ -77,11 +86,17 @@ where
           validation_keys,
           validation_options,
           jwks_http_client: http_client.clone(),
+
+          #[cfg(feature = "blind-signatures")]
+          blind_validation_keys: Arc::new(RwLock::new(None)),
         }
       })
       .collect::<Vec<_>>();
     let validator = Self { inner: Arc::new(inner) };
     validator.refetch_all_jwks().await?;
+
+    #[cfg(feature = "blind-signatures")]
+    validator.refetch_all_blind_jwks().await?;
 
     Ok(validator)
   }
@@ -135,6 +150,62 @@ where
 
     Ok(())
   }
+
+  /// Validate an unblinded token in base64url. Return Ok(()) if validation is successful with any one of blind validation keys.
+  pub async fn validate_unblinded_token(&self, unblinded_token_b64u: &str) -> Result<()> {
+    let unblinded_token = UnblindedToken::try_from_base64url(unblinded_token_b64u)?;
+
+    let futures = self.inner.iter().map(|each| {
+      let unblinded_token = unblinded_token.clone();
+      async move {
+        let blind_vks = each.blind_validation_keys.read().await;
+        if let Some(vks) = blind_vks.as_ref() {
+          let res = vks
+            .iter()
+            .map(|vk| vk.verify(&unblinded_token))
+            .filter_map(|res| {
+              if res.as_ref().is_err() {
+                debug!(
+                  "(Validation key likely mismatched with token) failed to validate id token: {}",
+                  res.as_ref().err().unwrap()
+                );
+              };
+              res.ok()
+            })
+            .collect::<Vec<_>>();
+          return Ok(res);
+        }
+        Err(ValidationError::BlindValidationFailed)
+      }
+    });
+
+    let results = join_all(futures)
+      .await
+      .into_iter()
+      .filter_map(|res| res.ok())
+      .flatten()
+      .collect::<Vec<_>>();
+
+    if results.is_empty() {
+      debug!("Empty blind validation results");
+      bail!(ValidationError::BlindValidationFailed);
+    }
+    Ok(())
+  }
+
+  /// Update blinkd validation keys of all token APIs
+  #[cfg(feature = "blind-signatures")]
+  pub async fn refetch_all_blind_jwks(&self) -> Result<()> {
+    let futures = self.inner.iter().map(|each_endpoint| async {
+      if let Err(e) = each_endpoint.refetch_blind_jwks().await {
+        error!("Failed to retrieve blind jwks. No update: {}", e);
+      };
+    });
+
+    join_all(futures).await;
+
+    Ok(())
+  }
 }
 
 impl<H> TokenValidatorInner<H>
@@ -144,17 +215,8 @@ where
   /// refetch jwks from the server
   async fn refetch_jwks(&self) -> Result<()> {
     debug!("refetch jwks: {}/{}", self.token_api, ENDPOINT_JWKS_PATH);
-    let mut jwks_endpoint = self.token_api.clone();
-    jwks_endpoint
-      .path_segments_mut()
-      .map_err(|_| ValidationError::JwksUrlError)?
-      .push(ENDPOINT_JWKS_PATH);
 
-    let jwks_res = self.jwks_http_client.fetch_jwks::<JwksResponse>(&jwks_endpoint).await?;
-
-    if jwks_res.keys.is_empty() {
-      bail!(ValidationError::EmptyJwks)
-    }
+    let jwks_res = self.refetch_jwks_inner(ENDPOINT_JWKS_PATH).await?;
 
     let vks = jwks_res
       .keys
@@ -173,5 +235,42 @@ where
     );
 
     Ok(())
+  }
+
+  #[cfg(feature = "blind-signatures")]
+  /// refetch blind validation keys from the server
+  async fn refetch_blind_jwks(&self) -> Result<()> {
+    debug!("refetch blind_jwks: {}/{}", self.token_api, ENDPOINT_BLIND_JWKS_PATH);
+
+    let jwks_res = self.refetch_jwks_inner(ENDPOINT_BLIND_JWKS_PATH).await?;
+
+    let blind_vks = jwks_res.keys.iter().map(RsaPublicKey::from_jwk).collect::<Result<Vec<_>>>()?;
+
+    let mut lock = self.blind_validation_keys.write().await;
+    lock.replace(blind_vks);
+    drop(lock);
+
+    info!(
+      "validation key for blind signature updated from blindjwks endpoint: {}/{}",
+      self.token_api.as_str(),
+      ENDPOINT_BLIND_JWKS_PATH
+    );
+
+    Ok(())
+  }
+
+  async fn refetch_jwks_inner(&self, path: &str) -> Result<JwksResponse> {
+    let mut jwks_endpoint = self.token_api.clone();
+    jwks_endpoint
+      .path_segments_mut()
+      .map_err(|_| ValidationError::JwksUrlError)?
+      .push(path);
+
+    let jwks_res = self.jwks_http_client.fetch_jwks::<JwksResponse>(&jwks_endpoint).await?;
+
+    if jwks_res.keys.is_empty() {
+      bail!(ValidationError::EmptyJwks)
+    }
+    Ok(jwks_res)
   }
 }

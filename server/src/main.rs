@@ -70,8 +70,8 @@ async fn define_route(shared_state: Arc<AppState>) {
 
   #[cfg(feature = "blind-signatures")]
   let api_routes = api_routes
-    .route("/blind_jwks", get(blind_jwks))
-    .route("/blind_sign", post(blind_sign));
+    .route("/blindjwks", get(blind_jwks))
+    .route("/blindsign", post(blind_sign));
 
   let api_routes = api_routes.with_state(shared_state.clone());
 

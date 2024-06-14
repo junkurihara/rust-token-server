@@ -12,7 +12,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libcommon = { path = "../common", package = "rust-token-server-common" }
+libcommon = { path = "../common", package = "rust-token-server-common", default-features = false }
 
 anyhow = "1.0.86"
 tracing = "0.1.40"
@@ -34,3 +34,11 @@ reqwest = { version = "0.12.4", default-features = false, features = [
   "default",
 ] }
 dotenvy = "0.15.7"
+libclient = { path = "../lib-client/", package = "rust-token-server-client", default-features = false, features = [
+  "blind-signatures",
+] }
+
+
+[features]
+default = ["blind-signatures"]
+blind-signatures = ["libcommon/blind-signatures"]

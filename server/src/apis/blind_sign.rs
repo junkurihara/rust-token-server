@@ -122,12 +122,8 @@ pub async fn blind_sign(
     return Err(BlindSignError::SignFailed);
   };
 
-  let will_rotate_at =
+  let expires_at =
     state.blind_crypto.rotated_at.load(std::sync::atomic::Ordering::Relaxed) + state.blind_crypto.rotation_period.as_secs();
-  let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
-    return Err(BlindSignError::SignFailed);
-  };
-  let expires_at = will_rotate_at - now.as_secs();
 
   Ok(Json(BlindSignResponse {
     blind_signature,

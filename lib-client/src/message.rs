@@ -1,5 +1,4 @@
 use libcommon::{TokenBody, TokenMeta};
-// use crate::token::{TokenInner, TokenMeta};
 use serde::{Deserialize, Serialize};
 
 /// Authentication request
@@ -59,5 +58,22 @@ pub struct DeleteUserRequest {
 #[derive(Deserialize, Debug)]
 /// Create/delete user response
 pub(super) struct MessageResponse {
+  pub message: String,
+}
+
+#[cfg(feature = "blind-signatures")]
+/// Sign request for blind signatures
+#[derive(Serialize, Debug)]
+pub(super) struct BlindSignRequest {
+  pub blinded_token: libcommon::blind_sig::BlindedToken,
+}
+
+#[cfg(feature = "blind-signatures")]
+/// Sign response for blind signatures
+#[derive(Deserialize, Debug)]
+pub(super) struct BlindSignResponse {
+  pub blind_signature: libcommon::blind_sig::BlindSignature,
+  pub expires_at: u64,
+  #[allow(dead_code)]
   pub message: String,
 }

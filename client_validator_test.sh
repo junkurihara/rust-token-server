@@ -9,6 +9,8 @@ ID_TOKEN_ENV=/tmp/id_token.env
 
 cargo build --package rust-token-server
 
+pgrep -f rust-token-server | xargs kill -9
+
 ######################
 echo "ES256"
 ADMIN_PASSWORD=${ADMIN_PASSWORD}\
@@ -18,7 +20,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   --signing-key-path=./server/sample-keys/p256.private_key.pem \
   --db-file-path=${CLIENT_DB_PATH} &
 
-sleep 3
+sleep 5
 
 ######################
 echo "lib-client"
@@ -37,14 +39,19 @@ curl -X POST -H "Content-Type: application/json" \
 
 RUST_LOG=debug \
   ID_TOKEN_ENV=${ID_TOKEN_ENV} \
+  ADMIN_NAME=${ADMIN_NAME}\
+  ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   CLIENT_ID=${CLIENT_ID}\
   TOKEN_ENDPOINT=${TOKEN_ENDPOINT}\
   TOKEN_ISSUER=${TOKEN_ENDPOINT}\
   cargo test --package rust-token-server-validator -- --nocapture
 
 pgrep -f rust-token-server | xargs kill -9
+
 rm ${CLIENT_DB_PATH}
 rm ${ID_TOKEN_ENV}
+
+sleep 5
 
 ######################
 echo "Ed25519"
@@ -55,7 +62,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   --signing-key-path=./server/sample-keys/ed25519.private_key.pem \
   --db-file-path=${CLIENT_DB_PATH}  &
 
-sleep 3
+sleep 5
 
 ######################
 echo "lib-client"
@@ -73,6 +80,8 @@ curl -X POST -H "Content-Type: application/json" \
 
 RUST_LOG=debug \
   ID_TOKEN_ENV=${ID_TOKEN_ENV} \
+  ADMIN_NAME=${ADMIN_NAME}\
+  ADMIN_PASSWORD=${ADMIN_PASSWORD}\
   CLIENT_ID=${CLIENT_ID}\
   TOKEN_ENDPOINT=${TOKEN_ENDPOINT}\
   TOKEN_ISSUER=${TOKEN_ENDPOINT}\
