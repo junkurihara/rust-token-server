@@ -17,11 +17,11 @@ libcommon = { path = "../common", package = "rust-token-server-common" }
 
 tracing = "0.1.40"
 anyhow = "1.0.86"
-url = "2.5.0"
-serde = { version = "1.0.202", features = ["derive"] }
+url = "2.5.1"
+serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 chrono = "0.4.38"
-tokio = { version = "1.37.0", features = [
+tokio = { version = "1.38.0", features = [
   "net",
   "rt-multi-thread",
   "time",

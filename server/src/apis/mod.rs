@@ -1,3 +1,8 @@
+#[cfg(feature = "blind-signatures")]
+mod blind_jwks;
+#[cfg(feature = "blind-signatures")]
+mod blind_sign;
+
 mod create_user;
 mod delete_user;
 mod get_tokens;
@@ -8,6 +13,11 @@ mod refresh;
 mod request;
 mod response;
 mod update_user;
+
+#[cfg(feature = "blind-signatures")]
+pub use blind_jwks::blind_jwks;
+#[cfg(feature = "blind-signatures")]
+pub use blind_sign::blind_sign;
 
 pub use create_user::create_user;
 pub use delete_user::delete_user;
