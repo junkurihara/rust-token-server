@@ -1,6 +1,6 @@
 [package]
 name = "rust-token-server-common"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Common library for `rust-token-server`"
 authors = ["Jun Kurihara"]
@@ -12,7 +12,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.202", default-features = false, features = ["derive"] }
+serde = { version = "1.0.203", default-features = false, features = ["derive"] }
 serde_json = "1.0.117"
 jwt-compact = { version = "0.8.0", features = [
   "p256",
