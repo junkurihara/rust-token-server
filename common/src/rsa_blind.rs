@@ -37,10 +37,10 @@ impl RsaPrivateKey {
   }
   /// Blind sign
   /// To avoid leaking the privacy of the user, we should not add any extra information to the token in addition to the original blind message.
-  pub fn blind_sign(&self, blind_token: &BlindedToken) -> Result<BlindSignature> {
+  pub fn blind_sign(&self, blinded_token: &BlindedToken) -> Result<BlindSignature> {
     let rng = &mut rand::thread_rng();
-    let blind_opts = Options::try_from(blind_token.blind_opts.clone())?;
-    let blind_msg = blind_token.blind_msg.clone();
+    let blind_opts = Options::try_from(blinded_token.blind_opts.clone())?;
+    let blind_msg = blinded_token.blind_msg.clone();
     let blind_sig = self.inner.blind_sign(rng, &blind_msg, &blind_opts)?;
 
     Ok(BlindSignature {
@@ -117,7 +117,7 @@ impl RsaPublicKey {
   }
 
   /// Unblind (finalize) the message and signature by redeeming the blinding
-  pub fn unblind(&self, blind_sig: &BlindSignature, blind_result: &BlindResult, org_msg: &[u8]) -> Result<UnblindedToken> {
+  pub fn unblind(&self, blind_sig: &BlindSignature, blind_result: &BlindResult, org_msg: &[u8]) -> Result<AnonymousToken> {
     let secret = &blind_result.blind_secret;
     let opts = blind_result.blinded_token.blind_opts.clone().try_into()?;
     let sig = self
@@ -129,7 +129,7 @@ impl RsaPublicKey {
       .ok_or_else(|| anyhow::anyhow!("missing msg_randomizer"))?
       .0;
     let opt = blind_result.blinded_token.blind_opts.clone();
-    Ok(UnblindedToken {
+    Ok(AnonymousToken {
       message: org_msg.to_vec(),
       randomizer: rnd,
       signature: UnblindedSignature {
@@ -141,14 +141,14 @@ impl RsaPublicKey {
   }
 
   /// Verify the signature of the unblinded message
-  pub fn verify(&self, unblinded_token: &UnblindedToken) -> Result<()> {
+  pub fn verify(&self, anonymous_token: &AnonymousToken) -> Result<()> {
     let key_id = self.key_id()?;
-    ensure!(key_id == unblinded_token.signature.key_id, "key_id mismatch");
-    let sig = unblinded_token.signature.inner.clone();
-    let rnd = blind_rsa_signatures::MessageRandomizer::new(unblinded_token.randomizer);
-    let opt = Options::try_from(unblinded_token.options.clone())?;
+    ensure!(key_id == anonymous_token.signature.key_id, "key_id mismatch");
+    let sig = anonymous_token.signature.inner.clone();
+    let rnd = blind_rsa_signatures::MessageRandomizer::new(anonymous_token.randomizer);
+    let opt = Options::try_from(anonymous_token.options.clone())?;
 
-    sig.verify(&self.inner, Some(rnd), unblinded_token.message.as_slice(), &opt)?;
+    sig.verify(&self.inner, Some(rnd), anonymous_token.message.as_slice(), &opt)?;
     Ok(())
   }
 }
@@ -238,29 +238,29 @@ pub struct BlindSignature {
 /* ------------------------------------------------------ */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UnblindedSignature {
-  inner: blind_rsa_signatures::Signature,
-  key_id: String,
+  pub inner: blind_rsa_signatures::Signature,
+  pub key_id: String,
 }
 
 /* ------------------------------------------------------ */
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UnblindedToken {
-  message: Vec<u8>,
-  randomizer: [u8; 32],
-  signature: UnblindedSignature,
-  options: BlindOptions,
+pub struct AnonymousToken {
+  pub message: Vec<u8>,
+  pub randomizer: [u8; 32],
+  pub signature: UnblindedSignature,
+  pub options: BlindOptions,
 }
 
-impl TryFrom<UnblindedToken> for String {
+impl TryFrom<AnonymousToken> for String {
   type Error = anyhow::Error;
 
-  fn try_from(value: UnblindedToken) -> std::result::Result<Self, Self::Error> {
+  fn try_from(value: AnonymousToken) -> std::result::Result<Self, Self::Error> {
     let value = serde_json::to_string(&value)?;
     Ok(value)
   }
 }
 
-impl UnblindedToken {
+impl AnonymousToken {
   /// Convert to base64url string
   pub fn try_into_base64url(&self) -> Result<String> {
     let json_string = serde_json::to_string(&self)?;
@@ -271,7 +271,7 @@ impl UnblindedToken {
   pub fn try_from_base64url(base64urlsafenopad: &str) -> Result<Self> {
     let json_bytes = general_purpose::URL_SAFE_NO_PAD.decode(base64urlsafenopad.as_bytes())?;
     let json_string = std::str::from_utf8(&json_bytes)?;
-    let value: UnblindedToken = serde_json::from_str(json_string)?;
+    let value: AnonymousToken = serde_json::from_str(json_string)?;
     Ok(value)
   }
 }
@@ -364,7 +364,7 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
 
     let msg = b"hello world";
 
-    // [Client] Make a blind token for the message, send blind_result.blind_token to the server
+    // [Client] Make a blind token for the message, send blind_result.blinded_token to the server
     let opts = BlindOptions::default();
     let blind_result = pk.blind(msg, Some(&opts)).unwrap();
 
@@ -372,15 +372,15 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let blind_sig = sk.blind_sign(&blind_result.blinded_token).unwrap();
     assert!(blind_sig.key_id == pk.key_id().unwrap());
 
-    // [Client] Unblind the signature and make an unblinded token, then sent unblinded_token to the verifier
-    let unblinded_token = pk.unblind(&blind_sig, &blind_result, msg).unwrap();
-    let base64url_unblinded_token = unblinded_token.try_into_base64url().unwrap();
+    // [Client] Unblind the signature and make an anonymous token, then sent anonymous_token to the verifier
+    let anonymous_token = pk.unblind(&blind_sig, &blind_result, msg).unwrap();
+    let base64url_anonymous_token = anonymous_token.try_into_base64url().unwrap();
 
-    println!("{}", base64url_unblinded_token);
+    println!("{}", base64url_anonymous_token);
 
     // [Verifier] Fetch the public key and verify the signature
-    let unblinded_token = UnblindedToken::try_from_base64url(&base64url_unblinded_token).unwrap();
-    let res = pk.verify(&unblinded_token);
+    let anonymous_token = AnonymousToken::try_from_base64url(&base64url_anonymous_token).unwrap();
+    let res = pk.verify(&anonymous_token);
     assert!(res.is_ok());
   }
 
@@ -395,7 +395,7 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
 
     let msg = b"hello world";
 
-    // [Client] Make a blind token for the message, send blind_result.blind_token to the server
+    // [Client] Make a blind token for the message, send blind_result.blinded_token to the server
     let opts = BlindOptions::default();
     let blind_result = pk.blind(msg, Some(&opts)).unwrap();
 
@@ -403,15 +403,15 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let blind_sig = sk.blind_sign(&blind_result.blinded_token).unwrap();
     assert!(blind_sig.key_id == pk.key_id().unwrap());
 
-    // [Client] Unblind the signature and make an unblinded token, then sent unblinded_token to the verifier
-    let unblinded_token = pk.unblind(&blind_sig, &blind_result, msg).unwrap();
-    let base64url_unblinded_token = unblinded_token.try_into_base64url().unwrap();
+    // [Client] Unblind the signature and make an anonymous token, then sent anonymous_token to the verifier
+    let anonymous = pk.unblind(&blind_sig, &blind_result, msg).unwrap();
+    let base64url_anonymous_token = anonymous.try_into_base64url().unwrap();
 
-    println!("{}", base64url_unblinded_token);
+    println!("{}", base64url_anonymous_token);
 
     // [Verifier] Fetch the public key and verify the signature
-    let unblinded_token = UnblindedToken::try_from_base64url(&base64url_unblinded_token).unwrap();
-    let res = pk.verify(&unblinded_token);
+    let anonymous_token = AnonymousToken::try_from_base64url(&base64url_anonymous_token).unwrap();
+    let res = pk.verify(&anonymous_token);
     assert!(res.is_ok());
   }
 }

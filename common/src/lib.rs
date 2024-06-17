@@ -11,7 +11,7 @@ pub mod token_fields;
 #[cfg(feature = "blind-signatures")]
 pub mod blind_sig {
   pub use crate::rsa_blind::{
-    BlindOptions, BlindResult, BlindSignature, BlindedToken, RsaPrivateKey, RsaPublicKey, UnblindedToken,
+    AnonymousToken, BlindOptions, BlindResult, BlindSignature, BlindedToken, RsaPrivateKey, RsaPublicKey,
   };
 }
 

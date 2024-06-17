@@ -1,13 +1,15 @@
 use super::{error::*, log::*, ValidationConfig};
-use crate::constants::ENDPOINT_JWKS_PATH;
+use crate::{constants::ENDPOINT_JWKS_PATH, ValidationConfigInner};
 use async_trait::async_trait;
+use base64::{engine::general_purpose, Engine as _};
 use futures::future::join_all;
 use libcommon::{
   token_fields::{Audiences, ClientId, Issuer, TryNewField},
   Claims, ValidationKey, ValidationOptions,
 };
+use rustc_hash::FxHashMap as HashMap;
 use serde::{de::DeserializeOwned, Deserialize};
-use std::sync::Arc;
+use std::{hash::Hash, sync::Arc};
 use tokio::sync::RwLock;
 use url::Url;
 
@@ -40,25 +42,6 @@ where
   pub(crate) inner: Arc<Vec<TokenValidatorInner<H>>>,
 }
 
-/// Inner state of the validator
-pub struct TokenValidatorInner<H>
-where
-  H: JwksHttpClient,
-{
-  /// Token API endpoint
-  pub(crate) token_api: url::Url,
-  /// Validation key retrieved from the server
-  pub(crate) validation_keys: Arc<RwLock<Option<Vec<ValidationKey>>>>,
-  /// Validation options
-  pub(crate) validation_options: ValidationOptions,
-  /// http client to fetch jwks
-  jwks_http_client: Arc<H>,
-
-  #[cfg(feature = "blind-signatures")]
-  /// Blind validation key
-  pub(crate) blind_validation_keys: Arc<RwLock<Option<Vec<RsaPublicKey>>>>,
-}
-
 impl<H> TokenValidator<H>
 where
   H: JwksHttpClient,
@@ -67,30 +50,7 @@ where
     let inner = config
       .inner
       .iter()
-      .map(|each| {
-        let token_api = each.token_api.clone();
-
-        let validation_keys = Arc::new(RwLock::new(None));
-
-        let mut iss = std::collections::HashSet::new();
-        iss.insert(Issuer::new(each.token_issuer.as_str()).unwrap_or(Issuer::new("http://localhost:3000").unwrap()));
-        let aud = Audiences::from(each.client_ids.iter().flat_map(|id| ClientId::new(id.as_str())));
-        let validation_options = ValidationOptions {
-          allowed_issuers: Some(iss),
-          allowed_audiences: Some(aud),
-          ..Default::default()
-        };
-
-        TokenValidatorInner {
-          token_api,
-          validation_keys,
-          validation_options,
-          jwks_http_client: http_client.clone(),
-
-          #[cfg(feature = "blind-signatures")]
-          blind_validation_keys: Arc::new(RwLock::new(None)),
-        }
-      })
+      .map(|each| TokenValidatorInner::new(each, &http_client))
       .collect::<Vec<_>>();
     let validator = Self { inner: Arc::new(inner) };
     validator.refetch_all_jwks().await?;
@@ -101,40 +61,37 @@ where
     Ok(validator)
   }
 
-  /// Validate an id token. Return Ok(()) if validation is successful with any one of validation keys.
+  /// Validate an id token.
+  /// First by checking the key id in the id token header and try to find the validation key with the key id.
+  /// Return Ok(()) if validation is successful with the found validation key.
   pub async fn validate(&self, id_token: &str) -> Result<Vec<Claims>> {
-    let futures = self.inner.iter().map(|each| async move {
-      let validation_keys = each.validation_keys.read().await;
-      if let Some(validation_keys) = validation_keys.as_ref() {
-        let res = validation_keys
-          .iter()
-          .map(|vk| vk.validate(&id_token.try_into()?, &each.validation_options))
-          .filter_map(|res| {
-            if res.as_ref().is_err() {
-              debug!(
-                "(Validation key likely mismatched with token) failed to validate id token: {}",
-                res.as_ref().err().unwrap()
-              );
-            }
-            res.ok()
-          })
-          .collect::<Vec<_>>();
-        return Ok(res);
+    let key_id_in_id_token = key_id_in_id_token(id_token).ok_or(anyhow!("key id not found in id token"))?;
+
+    let futures = self.inner.iter().map(|each| {
+      let key_id_in_id_token = key_id_in_id_token.clone();
+      async move {
+        let lock = each.validation_keys.read().await;
+        let Some(vk) = lock.get(&key_id_in_id_token) else {
+          return None; // no matched key id
+        };
+        // matched case
+        let res = vk.validate(&id_token.try_into().ok()?, &each.validation_options);
+        Some(res)
       }
-      Err(ValidationError::ValidationFailed)
     });
 
-    let results = join_all(futures)
-      .await
-      .into_iter()
-      .filter_map(|res| res.ok())
-      .flatten()
-      .collect::<Vec<_>>();
-
-    if results.is_empty() {
-      debug!("Empty validation results");
+    let key_matched_results = join_all(futures).await.into_iter().flatten().collect::<Vec<_>>();
+    if key_matched_results.is_empty() {
+      debug!("Empty validation results, no matched key id");
       bail!(ValidationError::ValidationFailed);
     }
+
+    let results = key_matched_results.into_iter().filter_map(|res| res.ok()).collect::<Vec<_>>();
+    if results.is_empty() {
+      debug!("Empty validation results, all failed to validate id token");
+      bail!(ValidationError::ValidationFailed);
+    };
+
     Ok(results)
   }
 
@@ -151,45 +108,37 @@ where
     Ok(())
   }
 
-  /// Validate an unblinded token in base64url. Return Ok(()) if validation is successful with any one of blind validation keys.
-  pub async fn validate_unblinded_token(&self, unblinded_token_b64u: &str) -> Result<()> {
-    let unblinded_token = UnblindedToken::try_from_base64url(unblinded_token_b64u)?;
+  /// Validate an anonymous token in base64url. Return Ok(()) if validation is successful with a validation key matching the key_id in the signature.
+  pub async fn validate_anonymous_token(&self, anonymous_token_b64u: &str) -> Result<()> {
+    let anonymous_token = AnonymousToken::try_from_base64url(anonymous_token_b64u)?;
+    let key_id_in_anonymous_token = KeyId(anonymous_token.signature.key_id.clone());
 
     let futures = self.inner.iter().map(|each| {
-      let unblinded_token = unblinded_token.clone();
+      let anonymous_token = anonymous_token.clone();
+      let key_id_in_anonymous_token = key_id_in_anonymous_token.clone();
       async move {
-        let blind_vks = each.blind_validation_keys.read().await;
-        if let Some(vks) = blind_vks.as_ref() {
-          let res = vks
-            .iter()
-            .map(|vk| vk.verify(&unblinded_token))
-            .filter_map(|res| {
-              if res.as_ref().is_err() {
-                debug!(
-                  "(Validation key likely mismatched with token) failed to validate id token: {}",
-                  res.as_ref().err().unwrap()
-                );
-              };
-              res.ok()
-            })
-            .collect::<Vec<_>>();
-          return Ok(res);
-        }
-        Err(ValidationError::BlindValidationFailed)
+        let lock = each.blind_validation_keys.read().await;
+        let Some(bvk) = lock.get(&key_id_in_anonymous_token) else {
+          return None; // no matched key id
+        };
+        // matched case
+        let res = bvk.verify(&anonymous_token);
+        Some(res)
       }
     });
 
-    let results = join_all(futures)
-      .await
-      .into_iter()
-      .filter_map(|res| res.ok())
-      .flatten()
-      .collect::<Vec<_>>();
-
-    if results.is_empty() {
-      debug!("Empty blind validation results");
+    let key_matched_results = join_all(futures).await.into_iter().flatten().collect::<Vec<_>>();
+    if key_matched_results.is_empty() {
+      debug!("Empty blind validation results, no matched key id");
       bail!(ValidationError::BlindValidationFailed);
     }
+
+    let results = key_matched_results.into_iter().filter_map(|res| res.ok()).collect::<Vec<_>>();
+    if results.is_empty() {
+      debug!("Empty blind validation results, all failed to validate id token");
+      bail!(ValidationError::BlindValidationFailed);
+    };
+
     Ok(())
   }
 
@@ -208,24 +157,74 @@ where
   }
 }
 
+/* ------------------------------------------------------------------------ */
+/// Key Id to avoid the DoS attack like DNS key trap!
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeyId(String);
+
+/// Inner state of the validator
+pub struct TokenValidatorInner<H>
+where
+  H: JwksHttpClient,
+{
+  /// Token API endpoint
+  pub(crate) token_api: url::Url,
+  /// Validation key retrieved from the server
+  pub(crate) validation_keys: Arc<RwLock<HashMap<KeyId, ValidationKey>>>,
+  /// Validation options
+  pub(crate) validation_options: ValidationOptions,
+  /// http client to fetch jwks
+  jwks_http_client: Arc<H>,
+
+  #[cfg(feature = "blind-signatures")]
+  /// Blind validation key
+  pub(crate) blind_validation_keys: Arc<RwLock<HashMap<KeyId, RsaPublicKey>>>,
+}
+
 impl<H> TokenValidatorInner<H>
 where
   H: JwksHttpClient,
 {
+  /// Create a new instance of TokenValidatorInner
+  pub(crate) fn new(config: &ValidationConfigInner, http_client: &Arc<H>) -> Self {
+    let token_api = config.token_api.clone();
+
+    let validation_keys = Arc::new(RwLock::new(HashMap::default()));
+
+    let mut iss = std::collections::HashSet::new();
+    iss.insert(Issuer::new(config.token_issuer.as_str()).unwrap_or(Issuer::new("http://localhost:3000").unwrap()));
+    let aud = Audiences::from(config.client_ids.iter().flat_map(|id| ClientId::new(id.as_str())));
+    let validation_options = ValidationOptions {
+      allowed_issuers: Some(iss),
+      allowed_audiences: Some(aud),
+      ..Default::default()
+    };
+
+    TokenValidatorInner {
+      token_api,
+      validation_keys,
+      validation_options,
+      jwks_http_client: http_client.clone(),
+
+      #[cfg(feature = "blind-signatures")]
+      blind_validation_keys: Arc::new(RwLock::new(HashMap::default())),
+    }
+  }
   /// refetch jwks from the server
   async fn refetch_jwks(&self) -> Result<()> {
     debug!("refetch jwks: {}/{}", self.token_api, ENDPOINT_JWKS_PATH);
 
     let jwks_res = self.refetch_jwks_inner(ENDPOINT_JWKS_PATH).await?;
 
-    let vks = jwks_res
+    let vk_map = jwks_res
       .keys
       .iter()
       .map(ValidationKey::from_jwk)
-      .collect::<Result<Vec<_>>>()?;
+      .map(|vk| vk.map(|vk| (KeyId(vk.key_id()), vk)))
+      .collect::<Result<HashMap<_, _>>>()?;
 
     let mut validation_key_lock = self.validation_keys.write().await;
-    validation_key_lock.replace(vks);
+    *validation_key_lock = vk_map;
     drop(validation_key_lock);
 
     info!(
@@ -244,10 +243,15 @@ where
 
     let jwks_res = self.refetch_jwks_inner(ENDPOINT_BLIND_JWKS_PATH).await?;
 
-    let blind_vks = jwks_res.keys.iter().map(RsaPublicKey::from_jwk).collect::<Result<Vec<_>>>()?;
+    let blind_vk_map = jwks_res
+      .keys
+      .iter()
+      .map(RsaPublicKey::from_jwk)
+      .map(|bvk| bvk.and_then(|bvk| bvk.key_id().map(|key_id| (KeyId(key_id), bvk))))
+      .collect::<Result<HashMap<_, _>>>()?;
 
     let mut lock = self.blind_validation_keys.write().await;
-    lock.replace(blind_vks);
+    *lock = blind_vk_map;
     drop(lock);
 
     info!(
@@ -273,4 +277,22 @@ where
     }
     Ok(jwks_res)
   }
+}
+
+/* ------------------------------------------------------------------------ */
+/// Extract key id from id token header (jwt)
+fn key_id_in_id_token(id_token: &str) -> Option<KeyId> {
+  let header = id_token.split('.').next()?;
+  let Ok(header_json_bytes) = general_purpose::URL_SAFE_NO_PAD.decode(header.as_bytes()) else {
+    return None;
+  };
+  let Ok(header_json) = serde_json::from_slice(&header_json_bytes) as Result<serde_json::Value, _> else {
+    return None;
+  };
+  let kid = header_json
+    .get("kid")
+    .and_then(|kid| kid.clone().to_string().into())
+    .map(|kid| kid.trim_matches('"').to_string()); // remove unnecessary double quotes
+
+  kid.map(KeyId)
 }

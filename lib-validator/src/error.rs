@@ -11,6 +11,8 @@ pub enum ValidationError {
   JwksUrlError,
   #[error("Empty jwks response")]
   EmptyJwks,
-  #[error("Faild to validate unblinded token")]
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("Faild to validate anonymous token")]
   BlindValidationFailed,
 }

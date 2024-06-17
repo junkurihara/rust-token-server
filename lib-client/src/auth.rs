@@ -59,7 +59,7 @@ where
   validation_key: Arc<RwLock<Option<ValidationKey>>>,
 
   #[cfg(feature = "blind-signatures")]
-  pub(super) unblinded_token: Arc<RwLock<Option<UnblindedToken>>>,
+  pub(super) anonymous_token: Arc<RwLock<Option<AnonymousToken>>>,
   #[cfg(feature = "blind-signatures")]
   pub(super) blind_validation_key: Arc<RwLock<Option<RsaPublicKey>>>,
   #[cfg(feature = "blind-signatures")]
@@ -80,7 +80,7 @@ where
       validation_key: Arc::new(RwLock::new(None)),
 
       #[cfg(feature = "blind-signatures")]
-      unblinded_token: Arc::new(RwLock::new(None)),
+      anonymous_token: Arc::new(RwLock::new(None)),
       #[cfg(feature = "blind-signatures")]
       blind_validation_key: Arc::new(RwLock::new(None)),
       #[cfg(feature = "blind-signatures")]

@@ -174,10 +174,10 @@ mod tests {
     let res = token_client.request_blind_signature_with_id_token().await;
     assert!(res.is_ok());
 
-    let unblinded_token = token_client.unblinded_token().await;
-    assert!(unblinded_token.is_ok());
-    let unblinded_token = unblinded_token.unwrap();
-    println!("unblinded_token: {:?}", unblinded_token.try_into_base64url().unwrap());
+    let anonymous_token = token_client.anonymous_token().await;
+    assert!(anonymous_token.is_ok());
+    let anonymous_token = anonymous_token.unwrap();
+    println!("anonymous_token: {:?}", anonymous_token.try_into_base64url().unwrap());
 
     let remaining = token_client.blind_remaining_seconds_until_expiration().await;
     assert!(remaining.is_ok());

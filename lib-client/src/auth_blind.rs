@@ -54,17 +54,17 @@ where
       .await?;
     drop(client_lock);
 
-    let unblinded_token = pk.unblind(&blind_sign_res.blind_signature, &blind_result, random_msg.as_slice())?;
-    let mut unblinded_token_lock = self.unblinded_token.write().await;
-    unblinded_token_lock.replace(unblinded_token.clone());
-    drop(unblinded_token_lock);
+    let anonymous_token = pk.unblind(&blind_sign_res.blind_signature, &blind_result, random_msg.as_slice())?;
+    let mut anon_token_lock = self.anonymous_token.write().await;
+    anon_token_lock.replace(anonymous_token.clone());
+    drop(anon_token_lock);
 
     let mut blind_expires_at_lock = self.blind_expires_at.write().await;
     blind_expires_at_lock.replace(blind_sign_res.expires_at);
     drop(blind_expires_at_lock);
 
-    // verify the unblinded token
-    self.verify_unblinded_token().await?;
+    // verify the anonymous token
+    self.verify_anonymous_token().await?;
 
     /* --------------- */
     Ok(())
@@ -117,13 +117,13 @@ where
     Ok(())
   }
 
-  /// Verify unblinded token
-  async fn verify_unblinded_token(&self) -> Result<()> {
-    let unblinded_token_lock = self.unblinded_token.read().await;
-    let Some(unblinded_token) = unblinded_token_lock.as_ref().cloned() else {
-      bail!(AuthError::NoUnblindedToken);
+  /// Verify anonymous token
+  async fn verify_anonymous_token(&self) -> Result<()> {
+    let anon_token_lock = self.anonymous_token.read().await;
+    let Some(anon_token) = anon_token_lock.as_ref().cloned() else {
+      bail!(AuthError::NoAnonymousToken);
     };
-    drop(unblinded_token_lock);
+    drop(anon_token_lock);
 
     let vk_lock = self.blind_validation_key.read().await;
     let Some(blind_validation_key) = vk_lock.as_ref().cloned() else {
@@ -147,14 +147,14 @@ where
 
     // verify the signature validity
     ensure!(
-      blind_validation_key.verify(&unblinded_token).is_ok(),
+      blind_validation_key.verify(&anon_token).is_ok(),
       AuthError::InvalidBlindSignature
     );
 
     Ok(())
   }
 
-  /// Remaining seconds until expiration of unblinded token, i.e., until the rotation time of blind validation key
+  /// Remaining seconds until expiration of anonymous token, i.e., until the rotation time of blind validation key
   pub async fn blind_remaining_seconds_until_expiration(&self) -> Result<i64> {
     // These return unix time in secs
     let expires_at_lock = self.blind_expires_at.read().await;
@@ -173,11 +173,11 @@ where
     Ok((expires_at - current) as i64)
   }
 
-  /// Get unblinded token
-  pub async fn unblinded_token(&self) -> Result<UnblindedToken> {
-    let token_lock = self.unblinded_token.read().await;
+  /// Get anonymous token
+  pub async fn anonymous_token(&self) -> Result<AnonymousToken> {
+    let token_lock = self.anonymous_token.read().await;
     let Some(token) = token_lock.as_ref() else {
-      bail!(AuthError::NoUnblindedToken);
+      bail!(AuthError::NoAnonymousToken);
     };
     let token = token.clone();
     drop(token_lock);

@@ -168,8 +168,7 @@ impl ValidationKey {
   pub fn from_pem(pem: &str) -> Result<Self> {
     let (tag, doc) = Document::from_pem(pem).map_err(|e| anyhow!("Error decoding public key: {}", e))?;
     ensure!(tag == "PUBLIC KEY", "Invalid tag");
-    let spki_ref =
-      SubjectPublicKeyInfoRef::from_der(doc.as_bytes()).map_err(|e| anyhow!("Error decoding public key: {}", e))?;
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(doc.as_bytes()).map_err(|e| anyhow!("Error decoding public key: {}", e))?;
     match spki_ref.algorithm.oid.to_string().as_ref() {
       // ec
       algorithm_oids::EC => {
@@ -180,10 +179,7 @@ impl ValidationKey {
         match param.to_string().as_ref() {
           // prime256v1 = es256
           params_oids::Prime256v1 => {
-            let public_key = spki_ref
-              .subject_public_key
-              .as_bytes()
-              .ok_or(anyhow!("Invalid public key"))?;
+            let public_key = spki_ref.subject_public_key.as_bytes().ok_or(anyhow!("Invalid public key"))?;
             type PublicKey = <Es256 as Algorithm>::VerifyingKey;
             let inner = PublicKey::from_slice(public_key)?;
             Ok(Self::Es256(inner))
@@ -193,10 +189,7 @@ impl ValidationKey {
       }
       // ed25519
       algorithm_oids::Ed25519 => {
-        let public_key = spki_ref
-          .subject_public_key
-          .as_bytes()
-          .ok_or(anyhow!("Invalid public key"))?;
+        let public_key = spki_ref.subject_public_key.as_bytes().ok_or(anyhow!("Invalid public key"))?;
         type PublicKey = <Ed25519 as Algorithm>::VerifyingKey;
         let inner = PublicKey::from_slice(public_key)?;
         Ok(Self::Ed25519(inner))
@@ -241,7 +234,7 @@ impl ValidationKey {
     Ok(jwk)
   }
   /// Create key id
-  fn key_id(&self) -> String {
+  pub fn key_id(&self) -> String {
     use base64::{engine::general_purpose, Engine as _};
 
     let bytes = match self {
@@ -322,7 +315,8 @@ mod tests {
   use super::*;
 
   const P256_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgv7zxW56ojrWwmSo1\n4uOdbVhUfj9Jd+5aZIB9u8gtWnihRANCAARGYsMe0CT6pIypwRvoJlLNs4+cTh2K\nL7fUNb5i6WbKxkpAoO+6T3pMBG5Yw7+8NuGTvvtrZAXduA2giPxQ8zCf\n-----END PRIVATE KEY-----";
-  const EDDSA_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDSHAE++q1BP7T8tk+mJtS+hLf81B0o6CFyWgucDFN/C\n-----END PRIVATE KEY-----";
+  const EDDSA_PRIVATE_KEY: &str =
+    "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIDSHAE++q1BP7T8tk+mJtS+hLf81B0o6CFyWgucDFN/C\n-----END PRIVATE KEY-----";
 
   #[test]
   fn generate_and_validate_token() -> Result<()> {

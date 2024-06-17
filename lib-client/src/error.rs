@@ -53,6 +53,6 @@ pub enum AuthError {
   InvalidBlindSignature,
 
   #[cfg(feature = "blind-signatures")]
-  #[error("No unblinded token previously generated")]
-  NoUnblindedToken,
+  #[error("No anonymous token including unblinded signature previously generated")]
+  NoAnonymousToken,
 }
