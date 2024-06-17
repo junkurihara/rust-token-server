@@ -14,9 +14,11 @@ use tokio::sync::RwLock;
 use url::Url;
 
 #[cfg(feature = "blind-signatures")]
-use crate::constants::ENDPOINT_BLIND_JWKS_PATH;
+use crate::constants::{ENDPOINT_BLIND_JWKS_PATH, STALE_BLIND_JWKS_TIMEOUT_SEC};
 #[cfg(feature = "blind-signatures")]
 use libcommon::blind_sig::*;
+#[cfg(feature = "blind-signatures")]
+use tokio::time::{Duration, Instant};
 
 /// Trait defining http client for jwks retrieval
 #[async_trait]
@@ -108,7 +110,8 @@ where
     Ok(())
   }
 
-  /// Validate an anonymous token in base64url. Return Ok(()) if validation is successful with a validation key matching the key_id in the signature.
+  /// Validate an anonymous token in base64url.
+  /// Return Ok(()) if validation is successful with a validation key matching the key_id in the signature.
   pub async fn validate_anonymous_token(&self, anonymous_token_b64u: &str) -> Result<()> {
     let anonymous_token = AnonymousToken::try_from_base64url(anonymous_token_b64u)?;
     let key_id_in_anonymous_token = KeyId(anonymous_token.signature.key_id.clone());
@@ -117,13 +120,31 @@ where
       let anonymous_token = anonymous_token.clone();
       let key_id_in_anonymous_token = key_id_in_anonymous_token.clone();
       async move {
+        // try current key
         let lock = each.blind_validation_keys.read().await;
-        let Some(bvk) = lock.get(&key_id_in_anonymous_token) else {
-          return None; // no matched key id
-        };
-        // matched case
-        let res = bvk.verify(&anonymous_token);
-        Some(res)
+        if let Some(bvk) = lock.get(&key_id_in_anonymous_token) {
+          // matched case
+          let res = bvk.verify(&anonymous_token);
+          return Some(res);
+        }
+        drop(lock);
+
+        // try stale key within the certain period
+        let can_try_stale = each.blind_validation_keys_updated_at.read().await.elapsed() < each.blind_validation_keys_stale_alive;
+        debug!("Try stale key for anonymous token validation: {}", can_try_stale);
+        if !can_try_stale {
+          return None;
+        }
+        // try stale key
+        let lock = each.blind_validation_keys_stale.read().await;
+        if let Some(bvk_stale) = lock.get(&key_id_in_anonymous_token) {
+          // matched case for stale key
+          let res = bvk_stale.verify(&anonymous_token);
+          return Some(res);
+        }
+        drop(lock);
+        // no matched key id
+        None
       }
     });
 
@@ -177,8 +198,18 @@ where
   jwks_http_client: Arc<H>,
 
   #[cfg(feature = "blind-signatures")]
-  /// Blind validation key
+  /// Blind validation key (up-to-date)
   pub(crate) blind_validation_keys: Arc<RwLock<HashMap<KeyId, RsaPublicKey>>>,
+  #[cfg(feature = "blind-signatures")]
+  /// Stale blind validation key (to handle the case where the key is rotated)
+  /// this is used to verify the anonymous token signed by the previous key
+  pub(crate) blind_validation_keys_stale: Arc<RwLock<HashMap<KeyId, RsaPublicKey>>>,
+  #[cfg(feature = "blind-signatures")]
+  /// Time when the blind validation key is updated
+  pub(crate) blind_validation_keys_updated_at: Arc<RwLock<Instant>>,
+  #[cfg(feature = "blind-signatures")]
+  /// Accept stale key for a certain period after refetching the new key
+  pub(crate) blind_validation_keys_stale_alive: Duration,
 }
 
 impl<H> TokenValidatorInner<H>
@@ -208,6 +239,12 @@ where
 
       #[cfg(feature = "blind-signatures")]
       blind_validation_keys: Arc::new(RwLock::new(HashMap::default())),
+      #[cfg(feature = "blind-signatures")]
+      blind_validation_keys_stale: Arc::new(RwLock::new(HashMap::default())),
+      #[cfg(feature = "blind-signatures")]
+      blind_validation_keys_updated_at: Arc::new(RwLock::new(Instant::now())),
+      #[cfg(feature = "blind-signatures")]
+      blind_validation_keys_stale_alive: Duration::from_secs(STALE_BLIND_JWKS_TIMEOUT_SEC),
     }
   }
   /// refetch jwks from the server
@@ -251,7 +288,20 @@ where
       .collect::<Result<HashMap<_, _>>>()?;
 
     let mut lock = self.blind_validation_keys.write().await;
+    if *lock == blind_vk_map {
+      // no update
+      return Ok(());
+    }
+    let stale = lock.clone();
     *lock = blind_vk_map;
+    drop(lock);
+    // update the stale key
+    let mut lock = self.blind_validation_keys_stale.write().await;
+    *lock = stale;
+    drop(lock);
+    // update the time when the blind validation key is updated
+    let mut lock = self.blind_validation_keys_updated_at.write().await;
+    *lock = Instant::now();
     drop(lock);
 
     info!(

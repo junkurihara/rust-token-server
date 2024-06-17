@@ -50,7 +50,7 @@ impl RsaPrivateKey {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// RSA public key wrapper for blind RSA signatures
 pub struct RsaPublicKey {
   inner: blind_rsa_signatures::PublicKey,
