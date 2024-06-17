@@ -39,3 +39,10 @@ pub const REFRESH_TOKEN_DURATION_MINS: usize = 30 * 24 * 60;
 
 /// Maximum number of users per page in the list user API
 pub const MAX_USERS_PER_PAGE: u32 = 20;
+
+#[cfg(feature = "blind-signatures")]
+/// Default RSA key size for blind signature
+pub const BLIND_RSA_KEY_SIZE: usize = 2048;
+#[cfg(feature = "blind-signatures")]
+/// Default RSA key rotation period in minutes [default: 1 day]
+pub const BLIND_RSA_ROTATION_PERIOD_MINS: u64 = 1; //24 * 60;

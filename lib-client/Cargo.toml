@@ -1,6 +1,6 @@
 [package]
 name = "rust-token-server-client"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Client library for `rust-token-server`"
 authors = ["Jun Kurihara"]
@@ -13,15 +13,15 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libcommon = { path = "../common", package = "rust-token-server-common" }
+libcommon = { path = "../common", package = "rust-token-server-common", default-features = false }
 
 tracing = "0.1.40"
 anyhow = "1.0.86"
-url = "2.5.0"
-serde = { version = "1.0.202", features = ["derive"] }
+url = "2.5.1"
+serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 chrono = "0.4.38"
-tokio = { version = "1.37.0", features = [
+tokio = { version = "1.38.0", features = [
   "net",
   "rt-multi-thread",
   "time",
@@ -30,6 +30,8 @@ tokio = { version = "1.37.0", features = [
 ] }
 async-trait = "0.1.80"
 thiserror = "1.0.61"
+rand = { version = "0.8.5", optional = true }
+base64 = { version = "0.22.1", optional = true }
 
 
 [dev-dependencies]
@@ -38,3 +40,7 @@ reqwest = { version = "0.12.4", default-features = false, features = [
   "hickory-dns",
   "default",
 ] }
+
+[features]
+default = ["blind-signatures"]
+blind-signatures = ["libcommon/blind-signatures", "rand", "base64"]

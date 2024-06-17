@@ -219,3 +219,45 @@ For example, you can call it as:
 ```
 
 Where the `client_id` is still optional.
+
+---
+
+## RSA blind signatures
+
+This server dynamically generates RSA key pairs for RSA blind signatures. The key pairs are generated when the server is started, and periodically rotated every 24 hours. The key pairs are stored in the memory and not saved in the file system.
+
+### Getting a public key for RSA blind signatures
+
+This simply exposes RSA public key(s) for RSA blind signatures in JWKs format.
+
+```bash
+http://<your_domain>:<your_port>/v1.0/blindjwks
+```
+
+### Signing a message blinded by the user
+
+```bash
+http://<your_domain>:<your_port>/v1.0/blindsign
+```
+
+For example, you can call it as:
+
+```bash:
+% curl -i -X POST \
+  -H "Authorization: Bearer <user's jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{ "blinded_token": "<blinded_token>" }'
+  http://localhost:8000/v1.0/blindsign
+```
+
+where the `blinded_token` is defined in JSON format as follows:
+
+```json
+{
+  "blinded_token_message": "<raw rsa blinded message>",
+  "blinded_token_options":{
+    "hash": "<hash algorithm like: Sha384>",
+    "deterministic": <boolean>,
+    "salt_len": <integer>
+  }
+}

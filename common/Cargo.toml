@@ -1,6 +1,6 @@
 [package]
 name = "rust-token-server-common"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Common library for `rust-token-server`"
 authors = ["Jun Kurihara"]
@@ -12,9 +12,13 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.202", default-features = false, features = ["derive"] }
+serde = { version = "1.0.203", default-features = false, features = ["derive"] }
 serde_json = "1.0.117"
-jwt-compact = { version = "0.8.0", features = ["p256", "ed25519-compact"] }
+jwt-compact = { version = "0.8.0", features = [
+  "p256",
+  "ed25519-compact",
+  "rsa",             # for blind-rsa-signatures
+] }
 anyhow = "1.0.86"
 chrono = { version = "0.4.38", default-features = false }
 validator = { version = "0.18.1", features = ["derive"] }
@@ -26,3 +30,10 @@ spki = { version = "0.7.3", default-features = false, features = ["pem"] }
 sec1 = { version = "0.7.3", default-features = false }
 ed25519-compact = "2.1.1"
 sha2 = "0.10.8"
+# Blind rsa signatures RFC9474 to issue anynomized token
+blind-rsa-signatures = { version = "0.15.1", optional = true }
+rsa = { version = "0.9.6", optional = true }
+
+[features]
+default = ["blind-signatures"]
+blind-signatures = ["dep:blind-rsa-signatures", "dep:rsa"]

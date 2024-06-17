@@ -4,7 +4,6 @@ mod config;
 mod constants;
 mod entity;
 mod error;
-// mod jwt;
 mod log;
 mod state;
 mod table;
@@ -24,6 +23,9 @@ use axum::{
 use config::parse_opts;
 use std::sync::Arc;
 use tokio::runtime::Builder;
+
+#[cfg(feature = "blind-signatures")]
+use crate::apis::{blind_jwks, blind_sign};
 
 fn main() -> Result<()> {
   init_logger();
@@ -64,12 +66,22 @@ async fn define_route(shared_state: Arc<AppState>) {
     .route("/create_user", post(create_user))
     .route("/update_user", post(update_user))
     .route("/delete_user", post(delete_user))
-    .route("/list_users", post(list_users))
-    .with_state(shared_state);
+    .route("/list_users", post(list_users));
+
+  #[cfg(feature = "blind-signatures")]
+  let api_routes = api_routes
+    .route("/blindjwks", get(blind_jwks))
+    .route("/blindsign", post(blind_sign));
+
+  let api_routes = api_routes.with_state(shared_state.clone());
 
   let router = Router::new().route("/health", get(health_check)).nest("/v1.0", api_routes);
 
   let server = axum::serve(tcp_listener, router);
+
+  // start blind RSA key rotation
+  #[cfg(feature = "blind-signatures")]
+  shared_state.blind_crypto.start_rotation();
 
   if let Err(e) = server.await {
     error!("Server is down!: {e}");

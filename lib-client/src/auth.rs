@@ -14,6 +14,9 @@ use std::{
 use tokio::sync::RwLock;
 use url::Url;
 
+#[cfg(feature = "blind-signatures")]
+use libcommon::blind_sig::*;
+
 /// Trait defining http client for post and get
 #[async_trait]
 pub trait TokenHttpClient {
@@ -25,6 +28,12 @@ pub trait TokenHttpClient {
   /// Send GET request and get JSON response
   async fn get_json<R>(&self, url: &Url) -> Result<R>
   where
+    R: DeserializeOwned + Send + Sync;
+
+  #[cfg(feature = "blind-signatures")]
+  async fn post_json_with_bearer_token<S, R>(&self, url: &Url, json_body: &S, bearer_token: &str) -> Result<R>
+  where
+    S: Serialize + Send + Sync,
     R: DeserializeOwned + Send + Sync;
 }
 
@@ -43,11 +52,18 @@ pub struct TokenClient<H>
 where
   H: TokenHttpClient,
 {
-  config: AuthenticationConfig,
-  http_client: Arc<RwLock<H>>,
-  id_token: Arc<RwLock<Option<TokenBody>>>,
+  pub(super) config: AuthenticationConfig,
+  pub(super) http_client: Arc<RwLock<H>>,
+  pub(super) id_token: Arc<RwLock<Option<TokenBody>>>,
   refresh_token: Arc<RwLock<Option<RefreshToken>>>,
   validation_key: Arc<RwLock<Option<ValidationKey>>>,
+
+  #[cfg(feature = "blind-signatures")]
+  pub(super) anonymous_token: Arc<RwLock<Option<AnonymousToken>>>,
+  #[cfg(feature = "blind-signatures")]
+  pub(super) blind_validation_key: Arc<RwLock<Option<RsaPublicKey>>>,
+  #[cfg(feature = "blind-signatures")]
+  pub(super) blind_expires_at: Arc<RwLock<Option<u64>>>,
 }
 
 impl<H> TokenClient<H>
@@ -62,6 +78,13 @@ where
       id_token: Arc::new(RwLock::new(None)),
       refresh_token: Arc::new(RwLock::new(None)),
       validation_key: Arc::new(RwLock::new(None)),
+
+      #[cfg(feature = "blind-signatures")]
+      anonymous_token: Arc::new(RwLock::new(None)),
+      #[cfg(feature = "blind-signatures")]
+      blind_validation_key: Arc::new(RwLock::new(None)),
+      #[cfg(feature = "blind-signatures")]
+      blind_expires_at: Arc::new(RwLock::new(None)),
     })
   }
 
@@ -266,6 +289,7 @@ where
   }
 }
 
+/* ---------------------------------------------------- */
 /// Token client with admin privilege
 impl<H> TokenClient<H>
 where

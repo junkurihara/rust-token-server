@@ -31,4 +31,28 @@ pub enum AuthError {
   NoValidationKey,
   #[error("Not allowed operation. Needs admin privilege")]
   NotAllowed,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("No JWK in blind jwks")]
+  NoJwkInBlindJwks,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("No kid in blind jwks")]
+  NoKeyIdInBlindJwks,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("No blind validation key previously retrieved")]
+  NoBlindValidationKey,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("Invalid expiration time of blind validation key (given in blind sign result)")]
+  InvalidExpireTimeBlindValidationKey,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("Invalid blind signature")]
+  InvalidBlindSignature,
+
+  #[cfg(feature = "blind-signatures")]
+  #[error("No anonymous token including unblinded signature previously generated")]
+  NoAnonymousToken,
 }
