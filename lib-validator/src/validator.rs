@@ -290,6 +290,7 @@ where
     let mut lock = self.blind_validation_keys.write().await;
     if *lock == blind_vk_map {
       // no update
+      debug!("no update blind_jwks: {}/{}", self.token_api, ENDPOINT_BLIND_JWKS_PATH);
       return Ok(());
     }
     let stale = lock.clone();
