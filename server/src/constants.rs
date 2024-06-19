@@ -45,4 +45,4 @@ pub const MAX_USERS_PER_PAGE: u32 = 20;
 pub const BLIND_RSA_KEY_SIZE: usize = 2048;
 #[cfg(feature = "blind-signatures")]
 /// Default RSA key rotation period in minutes [default: 1 day]
-pub const BLIND_RSA_ROTATION_PERIOD_MINS: u64 = 1; //24 * 60;
+pub const BLIND_RSA_ROTATION_PERIOD_MINS: u64 = 24 * 60;

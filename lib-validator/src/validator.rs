@@ -131,13 +131,16 @@ where
 
         // try stale key within the certain period
         let can_try_stale = each.blind_validation_keys_updated_at.read().await.elapsed() < each.blind_validation_keys_stale_alive;
-        debug!("Try stale key for anonymous token validation: {}", can_try_stale);
         if !can_try_stale {
           return None;
         }
         // try stale key
         let lock = each.blind_validation_keys_stale.read().await;
         if let Some(bvk_stale) = lock.get(&key_id_in_anonymous_token) {
+          debug!(
+            "Try stale key for anonymous token validation: key_id = {}",
+            bvk_stale.key_id().unwrap_or("invalid".to_string())
+          );
           // matched case for stale key
           let res = bvk_stale.verify(&anonymous_token);
           return Some(res);
@@ -304,6 +307,12 @@ where
     let mut lock = self.blind_validation_keys_updated_at.write().await;
     *lock = Instant::now();
     drop(lock);
+    debug!(
+      "validation key for blind signature: current = {:?}, stale = {:?}, instant = {}",
+      self.blind_validation_keys.read().await.keys().collect::<Vec<_>>(),
+      self.blind_validation_keys_stale.read().await.keys().collect::<Vec<_>>(),
+      self.blind_validation_keys_updated_at.read().await.elapsed().as_secs()
+    );
 
     info!(
       "validation key for blind signature updated from blindjwks endpoint: {}/{}",
