@@ -6,7 +6,7 @@ use crate::{
   message::*,
 };
 use libcommon::{blind_sig::*, token_fields::Field};
-use rand::prelude::*;
+use rand::{rngs::OsRng, RngCore};
 
 /* ---------------------------------------------------- */
 // Blind signature related methods
@@ -29,8 +29,8 @@ where
     self.update_blind_validation_key().await?;
 
     // build random message
-    let mut rng = rand::thread_rng();
-    let random_msg = rng.gen::<[u8; BLIND_MESSAGE_BYTES]>();
+    let mut random_msg = [0u8; BLIND_MESSAGE_BYTES];
+    OsRng.fill_bytes(&mut random_msg);
 
     // make the message blinded
     let pk = self.blind_validation_key.read().await;
