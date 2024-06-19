@@ -168,8 +168,6 @@ where
       .unwrap()
       .as_secs();
 
-    ensure!(expires_at > current, AuthError::InvalidExpireTimeBlindValidationKey);
-
     Ok((expires_at - current) as i64)
   }
 
