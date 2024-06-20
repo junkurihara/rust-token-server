@@ -14,7 +14,8 @@ impl<H> TokenClient<H>
 where
   H: TokenHttpClient,
 {
-  /// Request a blind signature with randomly generated message
+  /// Request a blind signature with randomly generated message and stored blind validation key
+  /// The request will be dispatched with the ID token
   pub async fn request_blind_signature_with_id_token(&self) -> Result<()> {
     // get id token
     let id_token_lock = self.id_token.read().await;
@@ -25,9 +26,6 @@ where
     drop(id_token_lock);
 
     /* -- request blind signature on random message -- */
-    // first update blind jwks key
-    self.update_blind_validation_key().await?;
-
     // build random message
     let mut random_msg = [0u8; BLIND_MESSAGE_BYTES];
     OsRng.fill_bytes(&mut random_msg);
@@ -70,8 +68,9 @@ where
     Ok(())
   }
 
-  /// Update blind jwks key
-  async fn update_blind_validation_key(&self) -> Result<()> {
+  /// Is hosted blind jwks key updated?
+  /// If updated, the inner key is updated and returns Ok(true), otherwise Ok(false)
+  pub async fn update_blind_validation_key_if_stale(&self) -> Result<bool> {
     let mut blind_jwks_endpoint = self.config.token_api.clone();
     blind_jwks_endpoint
       .path_segments_mut()
@@ -99,19 +98,38 @@ where
     let Ok(jwk_string) = serde_json::to_string(jwk) else {
       bail!(AuthError::FailedToSerializeJwk);
     };
-    debug!("Matched JWK given at jwks endpoint is {}", &jwk_string);
+    debug!("Matched JWK given at blindjwks endpoint is {}", &jwk_string);
 
     let jwk_value = serde_json::to_value(jwk)?;
-    let blind_validation_key = RsaPublicKey::from_jwk(&jwk_value)?;
+    let fetched_key = RsaPublicKey::from_jwk(&jwk_value)?;
     // Check key id consistency
-    if kid != blind_validation_key.key_id()? {
+    if kid != fetched_key.key_id()? {
       bail!(AuthError::InvalidJwk);
     }
 
-    let mut lock = self.blind_validation_key.write().await;
-    lock.replace(blind_validation_key);
+    let lock = self.blind_validation_key.read().await;
+    let Some(current_key) = lock.as_ref() else {
+      // update the key if it is not set
+      drop(lock);
+      self.replace_blind_validation_key(fetched_key).await?;
+      return Ok(true);
+    };
+    if current_key != &fetched_key {
+      // update the key if it is different
+      drop(lock);
+      self.replace_blind_validation_key(fetched_key).await?;
+      return Ok(true);
+    }
     drop(lock);
 
+    Ok(false)
+  }
+
+  /// Replace stored blind jwks key with new one
+  async fn replace_blind_validation_key(&self, key: RsaPublicKey) -> Result<()> {
+    let mut lock = self.blind_validation_key.write().await;
+    lock.replace(key);
+    drop(lock);
     info!("blind validation key updated");
 
     Ok(())

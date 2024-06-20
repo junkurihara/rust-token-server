@@ -171,6 +171,9 @@ mod tests {
     token_client.login().await.unwrap();
     assert!(token_client.token().await.is_ok());
 
+    let res = token_client.update_blind_validation_key_if_stale().await;
+    assert!(res.is_ok());
+
     let res = token_client.request_blind_signature_with_id_token().await;
     assert!(res.is_ok());
 
