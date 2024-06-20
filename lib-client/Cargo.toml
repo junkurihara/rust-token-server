@@ -17,7 +17,7 @@ libcommon = { path = "../common", package = "rust-token-server-common", default-
 
 tracing = "0.1.40"
 anyhow = "1.0.86"
-url = "2.5.1"
+url = "2.5.2"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 chrono = "0.4.38"
@@ -37,7 +37,7 @@ base64 = { version = "0.22.1", optional = true }
 
 
 [dev-dependencies]
-reqwest = { version = "0.12.4", default-features = false, features = [
+reqwest = { version = "0.12.5", default-features = false, features = [
   "json",
   "hickory-dns",
   "default",

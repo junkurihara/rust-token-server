@@ -31,7 +31,7 @@ async-trait = "0.1.80"
 uuid = { version = "1.8.0", features = ["v4"] }
 validator = { version = "0.18.1", features = ["derive"] }
 rust-argon2 = "2.1.0"
-url = "2.5.1"
+url = "2.5.2"
 
 [features]
 default = ["blind-signatures"]
