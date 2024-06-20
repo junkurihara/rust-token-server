@@ -122,6 +122,7 @@ where
     }
     drop(lock);
 
+    debug!("blind validation key is up-to-date");
     Ok(false)
   }
 
