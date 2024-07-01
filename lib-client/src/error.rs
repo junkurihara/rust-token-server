@@ -5,10 +5,10 @@ pub(super) type AuthResult<T> = Result<T, AuthError>;
 /// Describes things that can go wrong in the authentication process
 #[derive(Debug, Error)]
 pub enum AuthError {
-  #[error("TokenHttpClient error")]
-  TokenHttpClientError {
-    #[from]
+  #[error("TokenHttpClient response is not 20x: {source}")]
+  TokenHttpClientErrorResponse {
     source: Box<dyn std::error::Error + Send + Sync>,
+    code: u16,
   },
 
   #[cfg(feature = "reqwest")]

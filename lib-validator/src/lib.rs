@@ -77,9 +77,7 @@ mod tests {
       let res = self.inner.post(url.to_owned()).json(json_body).send().await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        return Err(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err()),
-        });
+        return Err(AuthError::ReqwestClientError(err_res.unwrap_err()));
       }
       let json_res = res.json::<R>().await?;
       Ok(json_res)
@@ -91,9 +89,7 @@ mod tests {
       let res = self.inner.get(url.to_owned()).send().await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        return Err(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err()),
-        });
+        return Err(AuthError::ReqwestClientError(err_res.unwrap_err()));
       }
       let json_res = res.json::<R>().await?;
 
@@ -114,9 +110,7 @@ mod tests {
         .await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        return Err(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err()),
-        });
+        return Err(AuthError::ReqwestClientError(err_res.unwrap_err()));
       }
       let json_res = res.json::<R>().await?;
       Ok(json_res)
