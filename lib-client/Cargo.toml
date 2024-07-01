@@ -19,7 +19,7 @@ tracing = "0.1.40"
 anyhow = "1.0.86"
 url = "2.5.2"
 serde = { version = "1.0.203", features = ["derive"] }
-serde_json = "1.0.117"
+serde_json = "1.0.119"
 chrono = "0.4.38"
 tokio = { version = "1.38.0", features = [
   "net",
@@ -34,6 +34,7 @@ rand = { version = "0.8.5", default-features = false, features = [
   "getrandom",
 ], optional = true }
 base64 = { version = "0.22.1", optional = true }
+reqwest = { version = "0.12.5", default-features = false, optional = true }
 
 
 [dev-dependencies]
@@ -44,5 +45,6 @@ reqwest = { version = "0.12.5", default-features = false, features = [
 ] }
 
 [features]
-default = ["blind-signatures"]
+default = ["blind-signatures", "reqwest"]
 blind-signatures = ["libcommon/blind-signatures", "rand", "base64"]
+reqwest = ["dep:reqwest"]

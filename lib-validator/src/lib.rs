@@ -69,7 +69,7 @@ mod tests {
   #[cfg(feature = "blind-signatures")]
   #[async_trait]
   impl TokenHttpClient for MockHttpClient {
-    async fn post_json<S, R>(&self, url: &Url, json_body: &S) -> Result<R>
+    async fn post_json<S, R>(&self, url: &Url, json_body: &S) -> Result<R, AuthError>
     where
       S: Serialize + Send + Sync,
       R: DeserializeOwned + Send + Sync,
@@ -77,29 +77,29 @@ mod tests {
       let res = self.inner.post(url.to_owned()).json(json_body).send().await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        bail!(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err())
+        return Err(AuthError::TokenHttpClientError {
+          source: Box::new(err_res.unwrap_err()),
         });
       }
       let json_res = res.json::<R>().await?;
       Ok(json_res)
     }
-    async fn get_json<R>(&self, url: &Url) -> Result<R>
+    async fn get_json<R>(&self, url: &Url) -> Result<R, AuthError>
     where
       R: DeserializeOwned + Send + Sync,
     {
       let res = self.inner.get(url.to_owned()).send().await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        bail!(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err())
+        return Err(AuthError::TokenHttpClientError {
+          source: Box::new(err_res.unwrap_err()),
         });
       }
       let json_res = res.json::<R>().await?;
 
       Ok(json_res)
     }
-    async fn post_json_with_bearer_token<S, R>(&self, url: &Url, json_body: &S, bearer_token: &str) -> Result<R>
+    async fn post_json_with_bearer_token<S, R>(&self, url: &Url, json_body: &S, bearer_token: &str) -> Result<R, AuthError>
     where
       S: Serialize + Send + Sync,
       R: DeserializeOwned + Send + Sync,
@@ -114,8 +114,8 @@ mod tests {
         .await?;
       if !res.status().is_success() {
         let err_res = res.error_for_status_ref();
-        bail!(AuthError::TokenHttpClientError {
-          source: Box::new(err_res.unwrap_err())
+        return Err(AuthError::TokenHttpClientError {
+          source: Box::new(err_res.unwrap_err()),
         });
       }
       let json_res = res.json::<R>().await?;

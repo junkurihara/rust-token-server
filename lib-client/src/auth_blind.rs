@@ -16,11 +16,11 @@ where
 {
   /// Request a blind signature with randomly generated message and stored blind validation key
   /// The request will be dispatched with the ID token
-  pub async fn request_blind_signature_with_id_token(&self) -> Result<()> {
+  pub async fn request_blind_signature_with_id_token(&self) -> AuthResult<()> {
     // get id token
     let id_token_lock = self.id_token.read().await;
     let Some(token_inner) = id_token_lock.as_ref() else {
-      bail!(AuthError::NoIdToken);
+      return Err(AuthError::NoIdToken);
     };
     let id_token = token_inner.clone().id.clone();
     drop(id_token_lock);
@@ -33,10 +33,12 @@ where
     // make the message blinded
     let pk = self.blind_validation_key.read().await;
     let Some(pk) = pk.as_ref() else {
-      bail!(AuthError::NoBlindValidationKey);
+      return Err(AuthError::NoBlindValidationKey);
     };
     let opts = BlindOptions::default();
-    let blind_result = pk.blind(random_msg.as_slice(), Some(&opts))?;
+    let blind_result = pk
+      .blind(random_msg.as_slice(), Some(&opts))
+      .map_err(AuthError::FailedToMakeBlindSignatureRequest)?;
     let blind_sign_req = BlindSignRequest {
       blinded_token: blind_result.blinded_token.clone(),
     };
@@ -52,7 +54,9 @@ where
       .await?;
     drop(client_lock);
 
-    let anonymous_token = pk.unblind(&blind_sign_res.blind_signature, &blind_result, random_msg.as_slice())?;
+    let anonymous_token = pk
+      .unblind(&blind_sign_res.blind_signature, &blind_result, random_msg.as_slice())
+      .map_err(AuthError::FailedToUnblindSignedResponse)?;
     let mut anon_token_lock = self.anonymous_token.write().await;
     anon_token_lock.replace(anonymous_token.clone());
     drop(anon_token_lock);
@@ -70,7 +74,7 @@ where
 
   /// Is hosted blind jwks key updated?
   /// If updated, the inner key is updated and returns Ok(true), otherwise Ok(false)
-  pub async fn update_blind_validation_key_if_stale(&self) -> Result<bool> {
+  pub async fn update_blind_validation_key_if_stale(&self) -> AuthResult<bool> {
     let mut blind_jwks_endpoint = self.config.token_api.clone();
     blind_jwks_endpoint
       .path_segments_mut()
@@ -87,24 +91,24 @@ where
       .ok_or_else(|| AuthError::NoJwkInBlindJwks)?
       .clone();
     let Some(jwk) = jwk.as_object_mut() else {
-      bail!(AuthError::InvalidJwk);
+      return Err(AuthError::InvalidJwk);
     };
     let Some(kid_in_jwk) = jwk.get("kid").and_then(|v| v.as_str()) else {
-      bail!(AuthError::NoKeyIdInBlindJwks);
+      return Err(AuthError::NoKeyIdInBlindJwks);
     };
     let kid = kid_in_jwk.to_string();
     jwk.remove_entry("kid");
 
     let Ok(jwk_string) = serde_json::to_string(jwk) else {
-      bail!(AuthError::FailedToSerializeJwk);
+      return Err(AuthError::FailedToSerializeJwk);
     };
     debug!("Matched JWK given at blindjwks endpoint is {}", &jwk_string);
 
     let jwk_value = serde_json::to_value(jwk)?;
-    let fetched_key = RsaPublicKey::from_jwk(&jwk_value)?;
+    let fetched_key = RsaPublicKey::from_jwk(&jwk_value).map_err(AuthError::FailedToParseJwk)?;
     // Check key id consistency
-    if kid != fetched_key.key_id()? {
-      bail!(AuthError::InvalidJwk);
+    if kid != fetched_key.key_id().map_err(AuthError::BlindKeyIdParseError)? {
+      return Err(AuthError::InvalidJwk);
     }
 
     let lock = self.blind_validation_key.read().await;
@@ -127,7 +131,7 @@ where
   }
 
   /// Replace stored blind jwks key with new one
-  async fn replace_blind_validation_key(&self, key: RsaPublicKey) -> Result<()> {
+  async fn replace_blind_validation_key(&self, key: RsaPublicKey) -> AuthResult<()> {
     let mut lock = self.blind_validation_key.write().await;
     lock.replace(key);
     drop(lock);
@@ -137,24 +141,24 @@ where
   }
 
   /// Verify anonymous token
-  async fn verify_anonymous_token(&self) -> Result<()> {
+  async fn verify_anonymous_token(&self) -> AuthResult<()> {
     let anon_token_lock = self.anonymous_token.read().await;
     let Some(anon_token) = anon_token_lock.as_ref().cloned() else {
-      bail!(AuthError::NoAnonymousToken);
+      return Err(AuthError::NoAnonymousToken);
     };
     drop(anon_token_lock);
 
     let vk_lock = self.blind_validation_key.read().await;
     let Some(blind_validation_key) = vk_lock.as_ref().cloned() else {
-      bail!(AuthError::NoBlindValidationKey);
+      return Err(AuthError::NoBlindValidationKey);
     };
     drop(vk_lock);
 
     let expires_at_lock = self.blind_expires_at.read().await;
-    let Some(expires_in) = expires_at_lock.as_ref() else {
-      bail!(AuthError::InvalidExpireTimeBlindValidationKey);
+    let Some(expires_at) = expires_at_lock.as_ref() else {
+      return Err(AuthError::InvalidExpireTimeBlindValidationKey);
     };
-    let expires_in = expires_in.to_owned();
+    let expires_at = expires_at.to_owned();
     drop(expires_at_lock);
 
     // Check expiration
@@ -162,23 +166,22 @@ where
       .duration_since(std::time::UNIX_EPOCH)
       .unwrap()
       .as_secs();
-    ensure!(expires_in > now, AuthError::InvalidExpireTimeBlindValidationKey);
+    if expires_at <= now {
+      return Err(AuthError::InvalidExpireTimeBlindValidationKey);
+    }
 
     // verify the signature validity
-    ensure!(
-      blind_validation_key.verify(&anon_token).is_ok(),
-      AuthError::InvalidBlindSignature
-    );
-
-    Ok(())
+    blind_validation_key
+      .verify(&anon_token)
+      .map_err(|_| AuthError::InvalidBlindSignature)
   }
 
   /// Remaining seconds until expiration of anonymous token, i.e., until the rotation time of blind validation key
-  pub async fn blind_remaining_seconds_until_expiration(&self) -> Result<i64> {
+  pub async fn blind_remaining_seconds_until_expiration(&self) -> AuthResult<i64> {
     // These return unix time in secs
     let expires_at_lock = self.blind_expires_at.read().await;
     let Some(expires_at) = expires_at_lock.as_ref().cloned() else {
-      bail!(AuthError::InvalidExpireTimeBlindValidationKey);
+      return Err(AuthError::InvalidExpireTimeBlindValidationKey);
     };
     drop(expires_at_lock);
 
@@ -191,10 +194,10 @@ where
   }
 
   /// Get anonymous token
-  pub async fn anonymous_token(&self) -> Result<AnonymousToken> {
+  pub async fn anonymous_token(&self) -> AuthResult<AnonymousToken> {
     let token_lock = self.anonymous_token.read().await;
     let Some(token) = token_lock.as_ref() else {
-      bail!(AuthError::NoAnonymousToken);
+      return Err(AuthError::NoAnonymousToken);
     };
     let token = token.clone();
     drop(token_lock);
