@@ -144,6 +144,9 @@ mod tests {
     let token_client = get_token_client().await;
 
     token_client.login().await.unwrap();
+
+    token_client.update_blind_validation_key_if_stale().await.unwrap();
+
     token_client.request_blind_signature_with_id_token().await.unwrap();
     let anonymous_token = token_client.anonymous_token().await.unwrap();
 
