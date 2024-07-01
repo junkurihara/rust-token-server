@@ -12,7 +12,7 @@ pub enum AuthError {
   },
 
   #[cfg(feature = "reqwest")]
-  #[error("Reqwest client error: {0}")]
+  #[error(transparent)]
   ReqwestClientError(#[from] reqwest::Error),
 
   #[error("Failed to decode Id token: {0}")]
