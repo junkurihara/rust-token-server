@@ -43,7 +43,7 @@ impl<'de> Deserialize<'de> for Password {
     D: serde::Deserializer<'de>,
   {
     struct PasswordVisitor;
-    impl<'de> Visitor<'de> for PasswordVisitor {
+    impl Visitor<'_> for PasswordVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("password string")

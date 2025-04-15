@@ -42,7 +42,7 @@ impl<'de> Deserialize<'de> for SubscriberId {
     D: serde::Deserializer<'de>,
   {
     struct SubscriberIdVisitor;
-    impl<'de> Visitor<'de> for SubscriberIdVisitor {
+    impl Visitor<'_> for SubscriberIdVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("subscriber_id string")

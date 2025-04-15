@@ -17,7 +17,7 @@ impl SqliteRefreshTokenTable {
     Self { pool }
   }
 
-  pub async fn add_and_prune<'a>(&self, refresh_token: &'a RefreshTokenInfo) -> Result<()> {
+  pub async fn add_and_prune(&self, refresh_token: &RefreshTokenInfo) -> Result<()> {
     self.add(refresh_token).await?;
     self.prune_expired().await?;
     Ok(())

@@ -51,7 +51,7 @@ impl<'de> Deserialize<'de> for IdToken {
     D: serde::Deserializer<'de>,
   {
     struct IdTokenVisitor;
-    impl<'de> Visitor<'de> for IdTokenVisitor {
+    impl Visitor<'_> for IdTokenVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("id_token jwt string")

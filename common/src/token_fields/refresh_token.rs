@@ -61,7 +61,7 @@ impl<'de> Deserialize<'de> for RefreshToken {
     D: serde::Deserializer<'de>,
   {
     struct RefreshTokenVisitor;
-    impl<'de> Visitor<'de> for RefreshTokenVisitor {
+    impl Visitor<'_> for RefreshTokenVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("refresh token string")

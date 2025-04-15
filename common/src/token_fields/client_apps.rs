@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for ClientId {
     D: serde::Deserializer<'de>,
   {
     struct ClientIdVisitor;
-    impl<'de> Visitor<'de> for ClientIdVisitor {
+    impl Visitor<'_> for ClientIdVisitor {
       type Value = String;
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("client app id string")
@@ -86,10 +86,7 @@ where
   /// `xxxx,yyyy,zzzz`.
   fn new(client_ids: T) -> Result<Self> {
     let s: String = client_ids.into().to_string();
-    let value = s
-      .split(',')
-      .map(|s| ClientId::new(s).unwrap())
-      .collect::<HashSet<ClientId>>();
+    let value = s.split(',').map(|s| ClientId::new(s).unwrap()).collect::<HashSet<ClientId>>();
 
     let object = Self { value };
     Ok(object)
@@ -97,11 +94,7 @@ where
 }
 impl Audiences {
   pub fn into_string_hashset(self) -> HashSet<String> {
-    self
-      .value
-      .into_iter()
-      .map(|s| s.into_string())
-      .collect::<HashSet<String>>()
+    self.value.into_iter().map(|s| s.into_string()).collect::<HashSet<String>>()
   }
   pub fn get_one(&self) -> Option<&ClientId> {
     self.value.iter().next()
