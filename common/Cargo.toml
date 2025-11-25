@@ -30,7 +30,7 @@ spki = { version = "0.7.3", default-features = false, features = ["pem"] }
 sec1 = { version = "0.7.3", default-features = false }
 ed25519-compact = "2.2.0"
 sha2 = "0.10.9"
-# Blind rsa signatures RFC9474 to issue anynomized token
+# Blind rsa signatures RFC9474 to issue anonymized token
 blind-rsa-signatures = { version = "0.15.2", optional = true }
 rsa = { version = "0.9.9", optional = true }
 
