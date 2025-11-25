@@ -32,7 +32,7 @@ pub struct TokenBody {
 
 impl TokenBody {
   /// Decode id token and retrieve metadata
-  pub fn decode_id_token(&self) -> Result<UntrustedToken> {
+  pub fn decode_id_token(&self) -> Result<UntrustedToken<'_>> {
     // Token::decode_metadata(&self.id).map_err(|e| AuthError::FailedToDecodeIdToken(e).into())
     Ok(UntrustedToken::new(self.id.as_str())?)
   }

@@ -21,6 +21,7 @@ use argon2::{Config, Variant, Version};
 pub const ARGON2_CONFIG: Config = Config {
   variant: Variant::Argon2id,
   version: Version::Version13,
+  thread_mode: argon2::ThreadMode::Parallel,
   mem_cost: 4096,
   time_cost: 3,
   lanes: 4,
