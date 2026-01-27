@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use axum::{
   extract::State,
-  http::StatusCode,
+  http::{header, HeaderValue, StatusCode},
   response::{IntoResponse, Response},
   Json,
 };
@@ -29,7 +29,7 @@ impl IntoResponse for BlindJwksError {
   }
 }
 
-pub async fn blind_jwks(State(state): State<Arc<AppState>>) -> Result<Json<BlindJwks>, BlindJwksError> {
+pub async fn blind_jwks(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, BlindJwksError> {
   let Ok(lock) = state.blind_crypto.signing_key.read() else {
     return Err(BlindJwksError::InvalidPublicKeys);
   };
@@ -41,5 +41,14 @@ pub async fn blind_jwks(State(state): State<Arc<AppState>>) -> Result<Json<Blind
     keys: Some(vec![current_public_jwk]),
   };
 
-  Ok(Json(jwks))
+  let headers = [
+    (
+      header::CACHE_CONTROL,
+      HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    ),
+    (header::PRAGMA, HeaderValue::from_static("no-cache")),
+    (header::EXPIRES, HeaderValue::from_static("0")),
+  ];
+
+  Ok((StatusCode::OK, headers, Json(jwks)))
 }
