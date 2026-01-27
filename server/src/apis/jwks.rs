@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use axum::{
   extract::State,
-  http::StatusCode,
+  http::{header, HeaderValue, StatusCode},
   response::{IntoResponse, Response},
   Json,
 };
@@ -29,7 +29,7 @@ impl IntoResponse for JwksError {
   }
 }
 
-pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<Json<Jwks>, JwksError> {
+pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, JwksError> {
   let Ok(current_public_jwk) = state.crypto.signing_key.validation_key().to_jwk() else {
     return Err(JwksError::InvalidPublicKeys);
   };
@@ -38,5 +38,14 @@ pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<Json<Jwks>, Jwks
     keys: Some(vec![current_public_jwk]),
   };
 
-  Ok(Json(jwks))
+  let headers = [
+    (
+      header::CACHE_CONTROL,
+      HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    ),
+    (header::PRAGMA, HeaderValue::from_static("no-cache")),
+    (header::EXPIRES, HeaderValue::from_static("0")),
+  ];
+
+  Ok((StatusCode::OK, headers, Json(jwks)))
 }
