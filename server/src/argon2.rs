@@ -6,7 +6,7 @@ use rand::prelude::*;
 
 pub fn generate_argon2(password: &str) -> Result<String> {
   let mut salt = [0u8; ARGON2_SALT_LEN];
-  rand::thread_rng().fill_bytes(&mut salt);
+  rand::rng().fill_bytes(&mut salt);
 
   let hash = argon2::hash_encoded(password.as_bytes(), &salt, &ARGON2_CONFIG)?;
 

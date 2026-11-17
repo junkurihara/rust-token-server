@@ -1,7 +1,7 @@
 use super::{UserSearchKey, UserTable};
 use crate::{constants::*, entity::*, error::*};
 use async_trait::async_trait;
-use sqlx::sqlite::SqlitePool;
+use sqlx::{sqlite::SqlitePool, AssertSqlSafe};
 use std::convert::{From, TryInto};
 use validator::Validate;
 
@@ -18,6 +18,9 @@ impl SqliteUserTable {
   }
 }
 
+// Note on SQL statements:
+// Only constant table names and integers are embedded into SQL strings by `format!`, which are wrapped by `AssertSqlSafe`.
+// All other values must be passed via bind parameters to avoid SQL injection.
 #[async_trait]
 impl UserTable for SqliteUserTable {
   async fn add(&self, user: User) -> Result<()> {
@@ -25,7 +28,7 @@ impl UserTable for SqliteUserTable {
       "insert into {} (username, subscriber_id, encoded_hash, is_admin) VALUES (?, ?, ?, ?)",
       USER_TABLE_NAME
     );
-    let _res = sqlx::query(&sql)
+    let _res = sqlx::query(AssertSqlSafe(sql))
       .bind(user.username.as_str())
       .bind(user.subscriber_id.as_str())
       .bind(user.encoded_hash.as_str())
@@ -36,13 +39,14 @@ impl UserTable for SqliteUserTable {
   }
 
   async fn delete_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<()> {
-    let sql = match user_search_key {
-      UserSearchKey::SubscriberId(sub_id) => {
-        format!("delete from {} where subscriber_id=\"{}\"", USER_TABLE_NAME, sub_id.as_str())
-      }
-      UserSearchKey::Username(username) => format!("delete from {} where username=\"{}\"", USER_TABLE_NAME, username.as_str()),
+    let (sql, key) = match user_search_key {
+      UserSearchKey::SubscriberId(sub_id) => (
+        format!("delete from {} where subscriber_id=?", USER_TABLE_NAME),
+        sub_id.as_str(),
+      ),
+      UserSearchKey::Username(username) => (format!("delete from {} where username=?", USER_TABLE_NAME), username.as_str()),
     };
-    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    let _res = sqlx::query(AssertSqlSafe(sql)).bind(key).execute(&self.pool).await?;
     Ok(())
   }
 
@@ -50,7 +54,7 @@ impl UserTable for SqliteUserTable {
     if page == 0 {
       bail!("Page number starts from 1");
     }
-    let total_cnt = sqlx::query_scalar::<_, i64>(&format!("select count(*) from {}", USER_TABLE_NAME))
+    let total_cnt = sqlx::query_scalar::<_, i64>(AssertSqlSafe(format!("select count(*) from {}", USER_TABLE_NAME)))
       .fetch_one(&self.pool)
       .await?;
     let total_pages = (total_cnt as f64 / MAX_USERS_PER_PAGE as f64).ceil() as u32;
@@ -65,7 +69,7 @@ impl UserTable for SqliteUserTable {
       MAX_USERS_PER_PAGE,
       (page - 1) * MAX_USERS_PER_PAGE
     );
-    let user_rows: Vec<UserRow> = sqlx::query_as(&sql).fetch_all(&self.pool).await?;
+    let user_rows: Vec<UserRow> = sqlx::query_as(AssertSqlSafe(sql)).fetch_all(&self.pool).await?;
 
     let users = user_rows
       .into_iter()
@@ -81,70 +85,79 @@ impl UserTable for SqliteUserTable {
     new_username: Option<&Username>,
     new_password: Option<&Password>,
   ) -> Result<()> {
-    let sql = match (new_username, new_password) {
-      (Some(username), None) => format!(
-        "update {} set username=\"{}\" where subscriber_id=\"{}\"",
-        USER_TABLE_NAME,
-        username.as_str(),
-        subscriber_id.as_str()
+    // Bind values in the order of placeholders
+    let (sql, values) = match (new_username, new_password) {
+      (Some(username), None) => (
+        format!("update {} set username=? where subscriber_id=?", USER_TABLE_NAME),
+        vec![username.as_str().to_string(), subscriber_id.as_str().to_string()],
       ),
       (None, Some(password)) => {
         let encoded_hash = EncodedHash::generate(password)?;
-        format!(
-          "update {} set encoded_hash=\"{}\" where subscriber_id=\"{}\"",
-          USER_TABLE_NAME,
-          encoded_hash.as_str(),
-          subscriber_id.as_str()
+        (
+          format!("update {} set encoded_hash=? where subscriber_id=?", USER_TABLE_NAME),
+          vec![encoded_hash.into_string(), subscriber_id.as_str().to_string()],
         )
       }
       (Some(username), Some(password)) => {
         let encoded_hash = EncodedHash::generate(password)?;
-        format!(
-          "update {} set username=\"{}\", encoded_hash=\"{}\" where subscriber_id=\"{}\"",
-          USER_TABLE_NAME,
-          username.as_str(),
-          encoded_hash.as_str(),
-          subscriber_id.as_str()
+        (
+          format!(
+            "update {} set username=?, encoded_hash=? where subscriber_id=?",
+            USER_TABLE_NAME
+          ),
+          vec![
+            username.as_str().to_string(),
+            encoded_hash.into_string(),
+            subscriber_id.as_str().to_string(),
+          ],
         )
       }
       (None, None) => {
         bail!("Both or either one of username and password must be specified");
       }
     };
-    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    let query = values
+      .into_iter()
+      .fold(sqlx::query(AssertSqlSafe(sql)), |query, value| query.bind(value));
+    let _res = query.execute(&self.pool).await?;
     Ok(())
   }
 
   async fn update_password<'a>(&self, user_search_key: UserSearchKey<'a>, new_password: &Password) -> Result<()> {
     let encoded_hash = EncodedHash::generate(new_password)?;
-    let sql = match user_search_key {
-      UserSearchKey::SubscriberId(sub_id) => format!(
-        "update {} set encoded_hash=\"{}\" where subscriber_id=\"{}\"",
-        USER_TABLE_NAME,
-        encoded_hash.as_str(),
-        sub_id.as_str()
+    let (sql, key) = match user_search_key {
+      UserSearchKey::SubscriberId(sub_id) => (
+        format!("update {} set encoded_hash=? where subscriber_id=?", USER_TABLE_NAME),
+        sub_id.as_str(),
       ),
-      UserSearchKey::Username(username) => format!(
-        "update {} set encoded_hash=\"{}\" where username=\"{}\"",
-        USER_TABLE_NAME,
-        encoded_hash.as_str(),
-        username.as_str()
+      UserSearchKey::Username(username) => (
+        format!("update {} set encoded_hash=? where username=?", USER_TABLE_NAME),
+        username.as_str(),
       ),
     };
-    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    let _res = sqlx::query(AssertSqlSafe(sql))
+      .bind(encoded_hash.as_str())
+      .bind(key)
+      .execute(&self.pool)
+      .await?;
     Ok(())
   }
 
   async fn find_user<'a>(&self, user_search_key: UserSearchKey<'a>) -> Result<Option<User>> {
-    let sql = match user_search_key {
-      UserSearchKey::SubscriberId(sub_id) => {
-        format!("select * from {} where subscriber_id='{}'", USER_TABLE_NAME, sub_id.as_str())
-      }
-      UserSearchKey::Username(username) => {
-        format!("select * from {} where username='{}'", USER_TABLE_NAME, username.as_str())
-      }
+    let (sql, key) = match user_search_key {
+      UserSearchKey::SubscriberId(sub_id) => (
+        format!("select * from {} where subscriber_id=?", USER_TABLE_NAME),
+        sub_id.as_str(),
+      ),
+      UserSearchKey::Username(username) => (
+        format!("select * from {} where username=?", USER_TABLE_NAME),
+        username.as_str(),
+      ),
     };
-    let user_row_opt: Option<UserRow> = sqlx::query_as(&sql).fetch_optional(&self.pool).await?;
+    let user_row_opt: Option<UserRow> = sqlx::query_as(AssertSqlSafe(sql))
+      .bind(key)
+      .fetch_optional(&self.pool)
+      .await?;
     if let Some(user_row) = user_row_opt {
       let user: User = user_row.try_into()?;
       Ok(Some(user))

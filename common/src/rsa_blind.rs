@@ -1,47 +1,88 @@
 use anyhow::{bail, ensure, Result};
 use base64::{engine::general_purpose, Engine as _};
-use blind_rsa_signatures::{reexports::rsa::pkcs1::EncodeRsaPublicKey, Options};
+use blind_rsa_signatures::{HashAlgorithm, PSSZero, Randomized, PSS};
 use jwt_compact::jwk::JsonWebKey;
-use rsa::pkcs1::DecodeRsaPublicKey;
+use rsa::pkcs1::EncodeRsaPublicKey;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const DEFAULT_RSA_BIT_SIZE: usize = 4096;
 
+/// Key containers of blind-rsa-signatures.
+/// Key parsing, key generation and blind signing do not depend on the hash function, the salt mode and the message preparation,
+/// so the type-level parameters are fixed here only to hold keys.
+/// Parameters for blinding, finalization and verification are resolved at runtime from `BlindOptions`.
+type InnerSecretKey = blind_rsa_signatures::SecretKey<blind_rsa_signatures::Sha384, PSS, Randomized>;
+type InnerPublicKey = blind_rsa_signatures::PublicKey<blind_rsa_signatures::Sha384, PSS, Randomized>;
+
+/// Build `blind_rsa_signatures::PublicKey` from the raw RSA public key `$raw_key` with the type-level parameters given by `BlindParams`,
+/// bind it to `$pk`, and then evaluate `$body`.
+/// Message preparation is always randomized.
+macro_rules! with_blind_public_key {
+  ($params:expr, $raw_key:expr, |$pk:ident| $body:expr) => {{
+    let raw_key = $raw_key;
+    match $params {
+      BlindParams::Sha256Pss => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha256, PSS, Randomized>::new(raw_key.clone());
+        $body
+      }
+      BlindParams::Sha256PssZero => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha256, PSSZero, Randomized>::new(raw_key.clone());
+        $body
+      }
+      BlindParams::Sha384Pss => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha384, PSS, Randomized>::new(raw_key.clone());
+        $body
+      }
+      BlindParams::Sha384PssZero => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha384, PSSZero, Randomized>::new(raw_key.clone());
+        $body
+      }
+      BlindParams::Sha512Pss => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha512, PSS, Randomized>::new(raw_key.clone());
+        $body
+      }
+      BlindParams::Sha512PssZero => {
+        let $pk = blind_rsa_signatures::PublicKey::<blind_rsa_signatures::Sha512, PSSZero, Randomized>::new(raw_key.clone());
+        $body
+      }
+    }
+  }};
+}
+
 /// RSA private key wrapper for blind RSA signatures
 pub struct RsaPrivateKey {
-  inner: blind_rsa_signatures::SecretKey,
+  inner: InnerSecretKey,
 }
 
 impl RsaPrivateKey {
   /// Build private key, usually we should use this and should not use static key.
   /// Since we should not add expiration time to the token in order to avoid the privacy leakages, we should dynamically generate the key and rotate it periodically.
   pub fn new(bits: Option<usize>) -> Result<Self> {
-    let rng = &mut rand::thread_rng();
-    let key = blind_rsa_signatures::SecretKey::new(blind_rsa_signatures::reexports::rsa::RsaPrivateKey::new(
-      rng,
-      bits.unwrap_or(DEFAULT_RSA_BIT_SIZE),
-    )?);
-    Ok(Self { inner: key })
+    let rng = &mut rand::rng();
+    let key_pair = blind_rsa_signatures::KeyPair::generate(rng, bits.unwrap_or(DEFAULT_RSA_BIT_SIZE))?;
+    Ok(Self { inner: key_pair.sk })
   }
   /// Derive key from pem string to use a static private  key
   pub fn from_pem(pem: &str) -> Result<Self> {
-    let key = blind_rsa_signatures::SecretKey::from_pem(pem)?;
+    let key = InnerSecretKey::from_pem(pem)?;
     Ok(Self { inner: key })
   }
   /// Expose public key
   pub fn to_public_key(&self) -> RsaPublicKey {
+    // RSA parameters of the inner key have already been checked at generation or parsing
+    let inner = rsa::RsaPublicKey::from(self.inner.as_ref());
     RsaPublicKey {
-      inner: blind_rsa_signatures::PublicKey(self.inner.0.to_public_key()),
+      inner: InnerPublicKey::new(inner),
     }
   }
   /// Blind sign
   /// To avoid leaking the privacy of the user, we should not add any extra information to the token in addition to the original blind message.
   pub fn blind_sign(&self, blinded_token: &BlindedToken) -> Result<BlindSignature> {
-    let rng = &mut rand::thread_rng();
-    let blind_opts = Options::try_from(blinded_token.blind_opts.clone())?;
-    let blind_msg = blinded_token.blind_msg.clone();
-    let blind_sig = self.inner.blind_sign(rng, &blind_msg, &blind_opts)?;
+    // Blind signing itself does not depend on the blinding options, but reject unsupported ones here
+    BlindParams::try_from(&blinded_token.blind_opts)?;
+    let rng = &mut rand::rng();
+    let blind_sig = self.inner.blind_sign_with_rng(rng, &blinded_token.blind_msg)?;
 
     Ok(BlindSignature {
       inner: blind_sig,
@@ -53,21 +94,19 @@ impl RsaPrivateKey {
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// RSA public key wrapper for blind RSA signatures
 pub struct RsaPublicKey {
-  inner: blind_rsa_signatures::PublicKey,
+  inner: InnerPublicKey,
 }
 
 impl RsaPublicKey {
   /// Derive key from pem string
   pub fn from_pem(pem: &str) -> Result<Self> {
-    let key = blind_rsa_signatures::PublicKey::from_pem(pem)?;
+    let key = InnerPublicKey::from_pem(pem)?;
     Ok(Self { inner: key })
   }
   /// Export jwk public key
   pub fn to_jwk(&self) -> Result<serde_json::Value> {
     let kid = self.key_id()?;
-    let doc = self.inner.0.to_pkcs1_der()?;
-    let inner = rsa::RsaPublicKey::from_pkcs1_der(doc.as_bytes())?;
-    let jwk = JsonWebKey::from(&inner);
+    let jwk = JsonWebKey::from(self.inner.as_ref());
 
     let mut jwk = serde_json::to_value(jwk)?;
     jwk["kid"] = serde_json::Value::String(kid);
@@ -79,10 +118,10 @@ impl RsaPublicKey {
     let jwk_parsed: JsonWebKey<'_> = serde_json::from_value(jwk.clone())?;
     match &jwk_parsed {
       JsonWebKey::Rsa { private_parts: None, .. } => {
-        use rsa::pkcs1::EncodeRsaPublicKey;
         let inner = rsa::RsaPublicKey::try_from(&jwk_parsed)?;
+        // Import via DER to check the RSA parameters (modulus size and public exponent) by blind-rsa-signatures
         let doc = inner.to_pkcs1_der()?;
-        let inner = blind_rsa_signatures::PublicKey::from_der(doc.as_bytes())?;
+        let inner = InnerPublicKey::from_der(doc.as_bytes())?;
         Ok(Self { inner })
       }
       JsonWebKey::Rsa {
@@ -95,7 +134,7 @@ impl RsaPublicKey {
   pub fn key_id(&self) -> Result<String> {
     use base64::{engine::general_purpose, Engine as _};
 
-    let bytes = self.inner.0.to_pkcs1_der()?.to_vec();
+    let bytes = self.inner.as_ref().to_pkcs1_der()?.to_vec();
     let mut hasher = <Sha256 as Digest>::new();
     hasher.update(&bytes);
     let hash = hasher.finalize();
@@ -104,11 +143,12 @@ impl RsaPublicKey {
   /// Blind a message
   pub fn blind(&self, message: &[u8], opts: Option<&BlindOptions>) -> Result<BlindResult> {
     let opts = opts.unwrap_or(&BlindOptions::default()).clone();
-    let rng = &mut rand::thread_rng();
-    let blinding_result = self.inner.blind(rng, message, true, &opts.clone().try_into()?)?;
+    let params = BlindParams::try_from(&opts)?;
+    let rng = &mut rand::rng();
+    let blinding_result = with_blind_public_key!(params, self.inner.as_ref(), |pk| pk.blind(rng, message))?;
     Ok(BlindResult {
       blinded_token: BlindedToken {
-        blind_msg: blinding_result.blind_msg,
+        blind_msg: blinding_result.blind_message,
         blind_opts: opts,
       },
       blind_secret: blinding_result.secret,
@@ -118,11 +158,17 @@ impl RsaPublicKey {
 
   /// Unblind (finalize) the message and signature by redeeming the blinding
   pub fn unblind(&self, blind_sig: &BlindSignature, blind_result: &BlindResult, org_msg: &[u8]) -> Result<AnonymousToken> {
-    let secret = &blind_result.blind_secret;
-    let opts = blind_result.blinded_token.blind_opts.clone().try_into()?;
-    let sig = self
-      .inner
-      .finalize(&blind_sig.inner, secret, blind_result.msg_randomizer, org_msg, &opts)?;
+    let params = BlindParams::try_from(&blind_result.blinded_token.blind_opts)?;
+    let blinding_result = blind_rsa_signatures::BlindingResult {
+      blind_message: blind_result.blinded_token.blind_msg.clone(),
+      secret: blind_result.blind_secret.clone(),
+      msg_randomizer: blind_result.msg_randomizer,
+    };
+    let sig = with_blind_public_key!(params, self.inner.as_ref(), |pk| pk.finalize(
+      &blind_sig.inner,
+      &blinding_result,
+      org_msg
+    ))?;
     let rnd = blind_result
       .msg_randomizer
       .as_ref()
@@ -144,11 +190,15 @@ impl RsaPublicKey {
   pub fn verify(&self, anonymous_token: &AnonymousToken) -> Result<()> {
     let key_id = self.key_id()?;
     ensure!(key_id == anonymous_token.signature.key_id, "key_id mismatch");
-    let sig = anonymous_token.signature.inner.clone();
+    let sig = &anonymous_token.signature.inner;
     let rnd = blind_rsa_signatures::MessageRandomizer::new(anonymous_token.randomizer);
-    let opt = Options::try_from(anonymous_token.options.clone())?;
+    let params = BlindParams::try_from(&anonymous_token.options)?;
 
-    sig.verify(&self.inner, Some(rnd), anonymous_token.message.as_slice(), &opt)?;
+    with_blind_public_key!(params, self.inner.as_ref(), |pk| pk.verify(
+      sig,
+      Some(rnd),
+      anonymous_token.message.as_slice()
+    ))?;
     Ok(())
   }
 }
@@ -167,14 +217,14 @@ pub struct BlindResult {
 /// This includes the blinded message and blinding options sent towards the server from the client
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlindedToken {
-  pub blind_msg: blind_rsa_signatures::BlindedMessage,
+  pub blind_msg: blind_rsa_signatures::BlindMessage,
   pub blind_opts: BlindOptions,
 }
 
 impl BlindedToken {
   pub fn new(blind_msg: &[u8], blind_opts: &BlindOptions) -> Self {
     Self {
-      blind_msg: blind_rsa_signatures::BlindedMessage(blind_msg.to_vec()),
+      blind_msg: blind_rsa_signatures::BlindMessage(blind_msg.to_vec()),
       blind_opts: blind_opts.clone(),
     }
   }
@@ -188,27 +238,54 @@ pub struct BlindOptions {
   salt_len: Option<usize>,
 }
 
-impl TryFrom<BlindOptions> for Options {
+/// Combination of the hash function and the PSS salt mode validated from `BlindOptions`,
+/// which is mapped to the type-level parameters of blind-rsa-signatures.
+#[derive(Debug, Clone, Copy)]
+enum BlindParams {
+  Sha256Pss,
+  Sha256PssZero,
+  Sha384Pss,
+  Sha384PssZero,
+  Sha512Pss,
+  Sha512PssZero,
+}
+
+impl TryFrom<&BlindOptions> for BlindParams {
   type Error = anyhow::Error;
 
-  fn try_from(val: BlindOptions) -> std::result::Result<Self, Self::Error> {
+  fn try_from(val: &BlindOptions) -> std::result::Result<Self, Self::Error> {
+    // Deterministic padding means PSS without salt
     if val.deterministic {
       ensure!(val.salt_len.is_none(), "salt_len must be None for deterministic");
-      return Ok(Options::new(val.hash.into(), val.deterministic, 0));
+      return Ok(match val.hash {
+        Hash::Sha256 => Self::Sha256PssZero,
+        Hash::Sha384 => Self::Sha384PssZero,
+        Hash::Sha512 => Self::Sha512PssZero,
+      });
     }
-    ensure!(val.salt_len.is_some(), "salt_len must be Some for non-deterministic");
-    ensure!(val.salt_len.unwrap() > 0, "salt_len must be greater than 0");
-    Ok(Options::new(val.hash.into(), val.deterministic, val.salt_len.unwrap()))
+    let Some(salt_len) = val.salt_len else {
+      bail!("salt_len must be Some for non-deterministic");
+    };
+    // blind-rsa-signatures supports only the salt length equal to the hash output length for PSS with salt
+    let (params, hash_len) = match val.hash {
+      Hash::Sha256 => (Self::Sha256Pss, blind_rsa_signatures::Sha256::SALT_LEN),
+      Hash::Sha384 => (Self::Sha384Pss, blind_rsa_signatures::Sha384::SALT_LEN),
+      Hash::Sha512 => (Self::Sha512Pss, blind_rsa_signatures::Sha512::SALT_LEN),
+    };
+    ensure!(
+      salt_len == hash_len,
+      "salt_len must be equal to the hash output length ({hash_len} bytes) for non-deterministic"
+    );
+    Ok(params)
   }
 }
 
 impl Default for BlindOptions {
   fn default() -> Self {
-    use blind_rsa_signatures::reexports::digest::DynDigest;
     BlindOptions {
       hash: Hash::Sha384,
       deterministic: false,
-      salt_len: Some(blind_rsa_signatures::reexports::hmac_sha512::sha384::Hash::new().output_size()),
+      salt_len: Some(blind_rsa_signatures::Sha384::SALT_LEN),
     }
   }
 }
@@ -218,16 +295,6 @@ pub enum Hash {
   Sha256,
   Sha384,
   Sha512,
-}
-
-impl From<Hash> for blind_rsa_signatures::Hash {
-  fn from(val: Hash) -> Self {
-    match val {
-      Hash::Sha256 => blind_rsa_signatures::Hash::Sha256,
-      Hash::Sha384 => blind_rsa_signatures::Hash::Sha384,
-      Hash::Sha512 => blind_rsa_signatures::Hash::Sha512,
-    }
-  }
 }
 /* ------------------------------------------------------ */
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -358,9 +425,9 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let jwk = pk.to_jwk().unwrap();
     println!("{}", jwk);
     let pk2 = RsaPublicKey::from_jwk(&jwk).unwrap();
-    assert!(pk.inner.0 == pk2.inner.0);
+    assert!(pk.inner == pk2.inner);
     let pk3 = RsaPublicKey::from_pem(RSA4096_PUBLIC_KEY).unwrap();
-    assert!(pk.inner.0 == pk3.inner.0);
+    assert!(pk.inner == pk3.inner);
 
     let msg = b"hello world";
 
@@ -391,7 +458,7 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let jwk = pk.to_jwk().unwrap();
     println!("{}", jwk);
     let pk2 = RsaPublicKey::from_jwk(&jwk).unwrap();
-    assert!(pk.inner.0 == pk2.inner.0);
+    assert!(pk.inner == pk2.inner);
 
     let msg = b"hello world";
 
@@ -413,5 +480,53 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let anonymous_token = AnonymousToken::try_from_base64url(&base64url_anonymous_token).unwrap();
     let res = pk.verify(&anonymous_token);
     assert!(res.is_ok());
+  }
+
+  #[test]
+  fn test_blind_options() {
+    let sk = RsaPrivateKey::from_pem(RSA4096_PRIVATE_KEY).unwrap();
+    let pk = sk.to_public_key();
+    let msg = b"hello world";
+
+    // Supported combinations: PSS with salt length equal to the hash output length, and PSS without salt (deterministic)
+    let supported = [
+      (Hash::Sha256, false, Some(32)),
+      (Hash::Sha384, false, Some(48)),
+      (Hash::Sha512, false, Some(64)),
+      (Hash::Sha256, true, None),
+      (Hash::Sha384, true, None),
+      (Hash::Sha512, true, None),
+    ];
+    for (hash, deterministic, salt_len) in supported {
+      let opts = BlindOptions {
+        hash,
+        deterministic,
+        salt_len,
+      };
+      let blind_result = pk.blind(msg, Some(&opts)).unwrap();
+      let blind_sig = sk.blind_sign(&blind_result.blinded_token).unwrap();
+      let anonymous_token = pk.unblind(&blind_sig, &blind_result, msg).unwrap();
+      assert!(pk.verify(&anonymous_token).is_ok());
+
+      // Verification must fail for a different message
+      let mut tampered = anonymous_token.clone();
+      tampered.message = b"hello world!".to_vec();
+      assert!(pk.verify(&tampered).is_err());
+    }
+
+    // Unsupported combinations
+    let unsupported = [
+      (Hash::Sha384, false, Some(32)),
+      (Hash::Sha384, false, None),
+      (Hash::Sha384, true, Some(48)),
+    ];
+    for (hash, deterministic, salt_len) in unsupported {
+      let opts = BlindOptions {
+        hash,
+        deterministic,
+        salt_len,
+      };
+      assert!(pk.blind(msg, Some(&opts)).is_err());
+    }
   }
 }
