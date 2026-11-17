@@ -2,7 +2,7 @@ use super::RefreshTokenTable;
 use crate::{constants::*, entity::*, error::*};
 use async_trait::async_trait;
 use chrono::TimeZone;
-use sqlx::sqlite::SqlitePool;
+use sqlx::{sqlite::SqlitePool, AssertSqlSafe};
 use std::convert::TryInto;
 
 use libcommon::token_fields::{ClientId, Field, RefreshToken, SubscriberId, TryNewField};
@@ -33,6 +33,9 @@ impl SqliteRefreshTokenTable {
   }
 }
 
+// Note on SQL statements:
+// Only constant table names are embedded into SQL strings by `format!`, which are wrapped by `AssertSqlSafe`.
+// All other values must be passed via bind parameters to avoid SQL injection.
 #[async_trait]
 impl RefreshTokenTable for SqliteRefreshTokenTable {
   async fn add<'a>(&self, refresh_token: &'a RefreshTokenInfo) -> Result<()> {
@@ -40,7 +43,7 @@ impl RefreshTokenTable for SqliteRefreshTokenTable {
       "insert into {} (subscriber_id, client_id, refresh_token, expires) VALUES (?, ?, ?, ?)",
       REFRESH_TOKEN_TABLE_NAME
     );
-    let _res = sqlx::query(&sql)
+    let _res = sqlx::query(AssertSqlSafe(sql))
       .bind(refresh_token.subscriber_id.as_str())
       .bind(refresh_token.client_id.as_str())
       .bind(refresh_token.inner.as_str())
@@ -57,13 +60,15 @@ impl RefreshTokenTable for SqliteRefreshTokenTable {
   ) -> Result<Option<RefreshTokenInfo>> {
     let current = chrono::Local::now().timestamp();
     let sql = format!(
-      "select * from {} where client_id='{}' and refresh_token='{}' and expires>{}",
-      REFRESH_TOKEN_TABLE_NAME,
-      client_id.as_str(),
-      refresh_token_string.as_str(),
-      current
+      "select * from {} where client_id=? and refresh_token=? and expires>?",
+      REFRESH_TOKEN_TABLE_NAME
     );
-    let refresh_token_row_opt: Option<RefreshTokenRow> = sqlx::query_as(&sql).fetch_optional(&self.pool).await?;
+    let refresh_token_row_opt: Option<RefreshTokenRow> = sqlx::query_as(AssertSqlSafe(sql))
+      .bind(client_id.as_str())
+      .bind(refresh_token_string.as_str())
+      .bind(current)
+      .fetch_optional(&self.pool)
+      .await?;
     if let Some(refresh_token_row) = refresh_token_row_opt {
       let refresh_token: RefreshTokenInfo = refresh_token_row.try_into()?;
       Ok(Some(refresh_token))
@@ -74,8 +79,8 @@ impl RefreshTokenTable for SqliteRefreshTokenTable {
 
   async fn prune_expired(&self) -> Result<()> {
     let current = chrono::Local::now().timestamp();
-    let sql = format!("delete from {} where expires < {}", REFRESH_TOKEN_TABLE_NAME, current);
-    let _res = sqlx::query(&sql).execute(&self.pool).await?;
+    let sql = format!("delete from {} where expires < ?", REFRESH_TOKEN_TABLE_NAME);
+    let _res = sqlx::query(AssertSqlSafe(sql)).bind(current).execute(&self.pool).await?;
     Ok(())
   }
 }

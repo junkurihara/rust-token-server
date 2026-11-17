@@ -1,12 +1,12 @@
 use crate::{claim::CustomClaims, constants::JWT_DURATION_MINS, token::TokenBody, token_fields::*};
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use chrono::{DateTime, Duration, Utc};
 use jwt_compact::{
+  Algorithm, AlgorithmExt, Header, TimeOptions, UntrustedToken,
   alg::{Ed25519, Es256, VerifyingKey},
   jwk::JsonWebKey,
-  Algorithm, AlgorithmExt, Header, TimeOptions, UntrustedToken,
 };
-use pkcs8::{der::Decode, Document, PrivateKeyInfo};
+use pkcs8::{Document, PrivateKeyInfoRef, der::Decode};
 use sha2::{Digest, Sha256};
 use spki::SubjectPublicKeyInfoRef;
 use std::collections::HashSet;
@@ -43,7 +43,7 @@ impl SigningKey {
     let (tag, doc) = Document::from_pem(pem).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
     ensure!(tag == "PRIVATE KEY", "Invalid tag");
 
-    let pki = PrivateKeyInfo::from_der(doc.as_bytes()).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
+    let pki = PrivateKeyInfoRef::from_der(doc.as_bytes()).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
 
     match pki.algorithm.oid.to_string().as_ref() {
       // ec
@@ -55,7 +55,7 @@ impl SigningKey {
           .map_err(|e| anyhow!("Error decoding private key: {}", e))?;
         match param.to_string().as_ref() {
           params_oids::Prime256v1 => {
-            let private_key = sec1::EcPrivateKey::try_from(pki.private_key)
+            let private_key = sec1::EcPrivateKey::try_from(pki.private_key.as_bytes())
               .map_err(|e| anyhow!("Error decoding EcPrivateKey: {e}"))?
               .private_key;
             type SecretKey = <Es256 as Algorithm>::SigningKey;
@@ -70,7 +70,7 @@ impl SigningKey {
         debug!("Read Ed25519 private key");
         type SecretKey = <Ed25519 as Algorithm>::SigningKey;
         let mut seed = [0u8; 32];
-        seed.copy_from_slice(&pki.private_key[2..]);
+        seed.copy_from_slice(&pki.private_key.as_bytes()[2..]);
         let sk = ed25519_compact::KeyPair::from_seed(ed25519_compact::Seed::new(seed))
           .sk
           .to_vec();
@@ -235,10 +235,10 @@ impl ValidationKey {
   }
   /// Create key id
   pub fn key_id(&self) -> String {
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
 
     let bytes = match self {
-      Self::Es256(vk) => vk.to_encoded_point(true).as_bytes().to_vec(),
+      Self::Es256(vk) => vk.to_sec1_point(true).as_bytes().to_vec(),
       Self::Ed25519(vk) => vk.as_ref().to_vec(),
     };
     let mut hasher = <Sha256 as Digest>::new();
@@ -360,8 +360,8 @@ mod tests {
       pem: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERmLDHtAk+qSMqcEb6CZSzbOPnE4d\nii+31DW+YulmysZKQKDvuk96TARuWMO/vDbhk777a2QF3bgNoIj8UPMwnw==\n-----END PUBLIC KEY-----\n",
       id_token: "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2OTkyODcxNzYsImV4cCI6MTY5OTI4ODk3NiwibmJmIjoxNjk5Mjg3MTc2LCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20vdjEuMCIsInN1YiI6ImI2MjZmNTBlLTllYWUtNDlkOC04MjAxLTBhZmQyODNhZWNmZCIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjpmYWxzZX0.mmNxox_4nabjrlm-3AjDVX9U_tkQEKH5iHw3KSj22WnsmP4pKDEgZnVSWlxg3prLSfJZCfD3ZR1iiq6EFke45w",
     };
-    let ed25519 = PemTokenPair{
-      pem : "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1ixMQcxO46PLlgQfYS46ivFd+n0CcDHSKUnuhm3i1O0=\n-----END PUBLIC KEY-----\n",
+    let ed25519 = PemTokenPair {
+      pem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1ixMQcxO46PLlgQfYS46ivFd+n0CcDHSKUnuhm3i1O0=\n-----END PUBLIC KEY-----\n",
       id_token: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2OTkyODYzNjgsImV4cCI6MTY5OTI4ODE2OCwibmJmIjoxNjk5Mjg2MzY4LCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20vdjEuMCIsInN1YiI6IjZiYmI2NGVhLTMyZmUtNGEyNi05MjhlLWZlODlmNTcxNTA0YiIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjpmYWxzZX0.e6D156U4pwalnWmZNK5fDBSjUDflmHQObAiHJLPYu7AS-x81RlO3sRsNoqHz47m0zxOBEFVA3esV74U6xwkyAw",
     };
 
@@ -395,12 +395,12 @@ mod tests {
     }
     let ed25519 = JwkTokenPair {
       jwk: "{\"crv\":\"Ed25519\",\"kty\":\"OKP\",\"x\":\"1ixMQcxO46PLlgQfYS46ivFd-n0CcDHSKUnuhm3i1O0\"}",
-      id_token: "eyJhbGciOiJFZERTQSIsImtpZCI6ImdqckU3QUNNeGd6WWZGSGdhYmdmNGtMVGcxZUtJZHNKOTRBaUZURmoxaXMiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2OTk2MjYxMjUsImV4cCI6MTY5OTYyNzkyNSwibmJmIjoxNjk5NjI2MTI1LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAvdjEuMCIsInN1YiI6ImY2ZDMzNmVlLWFjNDgtNGNlYy04MTYzLTI5OThlMTc4YWVlMyIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.GVJhFknZP5iWe0fKoUJO-Wfg1Ti0ayb7mjUEWvfYhQXwM_dYt39nICiebLEQr3vqctxdyKO8PlXxFpe9bI6bCg"
+      id_token: "eyJhbGciOiJFZERTQSIsImtpZCI6ImdqckU3QUNNeGd6WWZGSGdhYmdmNGtMVGcxZUtJZHNKOTRBaUZURmoxaXMiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2OTk2MjYxMjUsImV4cCI6MTY5OTYyNzkyNSwibmJmIjoxNjk5NjI2MTI1LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAvdjEuMCIsInN1YiI6ImY2ZDMzNmVlLWFjNDgtNGNlYy04MTYzLTI5OThlMTc4YWVlMyIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.GVJhFknZP5iWe0fKoUJO-Wfg1Ti0ayb7mjUEWvfYhQXwM_dYt39nICiebLEQr3vqctxdyKO8PlXxFpe9bI6bCg",
     };
 
-    let es256 = JwkTokenPair{
+    let es256 = JwkTokenPair {
       jwk: "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"RmLDHtAk-qSMqcEb6CZSzbOPnE4dii-31DW-YulmysY\",\"y\":\"SkCg77pPekwEbljDv7w24ZO--2tkBd24DaCI_FDzMJ8\"}",
-      id_token: "eyJhbGciOiJFUzI1NiIsImtpZCI6ImszNHIzTnFmYWs2N2JoSlNYVGpUUm81dENJcjFCc3JlMWNQb0ozTEo5eEUiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2OTk2MjYxMjIsImV4cCI6MTY5OTYyNzkyMiwibmJmIjoxNjk5NjI2MTIyLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAvdjEuMCIsInN1YiI6IjZhMDJlNTRiLTk3NGEtNDViYy04ZDlhLWZhYzQzNzdhMDQ5MiIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.6O6wBd51zO-wZv7Y5r99NSqbEXg1XZtjhCW_FtvScZ8sPIOiU8GTHMfPxVriDyhiAC_W7NEOMZx-4myIeDiZCA"
+      id_token: "eyJhbGciOiJFUzI1NiIsImtpZCI6ImszNHIzTnFmYWs2N2JoSlNYVGpUUm81dENJcjFCc3JlMWNQb0ozTEo5eEUiLCJ0eXAiOiJKV1QifQ.eyJpYXQiOjE2OTk2MjYxMjIsImV4cCI6MTY5OTYyNzkyMiwibmJmIjoxNjk5NjI2MTIyLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAvdjEuMCIsInN1YiI6IjZhMDJlNTRiLTk3NGEtNDViYy04ZDlhLWZhYzQzNzdhMDQ5MiIsImF1ZCI6WyJjbGllbnRfaWQxIl0sImlzX2FkbWluIjp0cnVlfQ.6O6wBd51zO-wZv7Y5r99NSqbEXg1XZtjhCW_FtvScZ8sPIOiU8GTHMfPxVriDyhiAC_W7NEOMZx-4myIeDiZCA",
     };
 
     let pairs = [ed25519, es256];

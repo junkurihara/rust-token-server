@@ -1,7 +1,7 @@
 use super::{Field, TryNewField};
 use crate::constants::REFRESH_TOKEN_LEN;
 use anyhow::Result;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{distr::Alphanumeric, rng, RngExt};
 use serde::{
   de::{self, Visitor},
   Deserialize, Serialize,
@@ -36,7 +36,7 @@ impl Field for RefreshToken {
 }
 impl RefreshToken {
   pub fn generate() -> Result<Self> {
-    let value: String = thread_rng()
+    let value: String = rng()
       .sample_iter(&Alphanumeric)
       .take(REFRESH_TOKEN_LEN as usize)
       .map(char::from)

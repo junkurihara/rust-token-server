@@ -6,7 +6,7 @@ use crate::{
   message::*,
 };
 use libcommon::{blind_sig::*, token_fields::Field};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 
 /* ---------------------------------------------------- */
 // Blind signature related methods
@@ -28,7 +28,9 @@ where
     /* -- request blind signature on random message -- */
     // build random message
     let mut random_msg = [0u8; BLIND_MESSAGE_BYTES];
-    OsRng.fill_bytes(&mut random_msg);
+    SysRng
+      .try_fill_bytes(&mut random_msg)
+      .map_err(|e| AuthError::FailedToMakeBlindSignatureRequest(anyhow::anyhow!("Failed to generate random message: {e}")))?;
 
     // make the message blinded
     let pk = self.blind_validation_key.read().await;

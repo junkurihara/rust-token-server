@@ -4,7 +4,7 @@ use crate::{
   error::*,
   log::*,
 };
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -96,8 +96,8 @@ Password was automatically generated for the user of name "{}". Keep this secure
 
 fn generate_random_string(length: usize) -> Result<String> {
   const BASE_STR: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let mut rng = &mut rand::thread_rng();
-  let res = String::from_utf8(BASE_STR.as_bytes().choose_multiple(&mut rng, length).cloned().collect())?;
+  let mut rng = &mut rand::rng();
+  let res = String::from_utf8(BASE_STR.as_bytes().sample(&mut rng, length).cloned().collect())?;
   Ok(res)
 }
 
