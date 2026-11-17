@@ -1,12 +1,23 @@
 use anyhow::{bail, ensure, Result};
 use base64::{engine::general_purpose, Engine as _};
 use blind_rsa_signatures::{HashAlgorithm, PSSZero, Randomized, PSS};
-use jwt_compact::jwk::JsonWebKey;
-use rsa::pkcs1::EncodeRsaPublicKey;
+use rsa::{pkcs1::EncodeRsaPublicKey, traits::PublicKeyParts, BoxedUint};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const DEFAULT_RSA_BIT_SIZE: usize = 4096;
+/// Key type of RSA in JWK
+const JWK_KEY_TYPE_RSA: &str = "RSA";
+
+#[derive(Serialize, Deserialize)]
+/// RSA public key in JWK (RFC 7517), where unsupported parameters such as `kid` are ignored in parsing
+struct RsaJwk {
+  kty: String,
+  /// Modulus in base64url
+  n: String,
+  /// Public exponent in base64url
+  e: String,
+}
 
 /// Key containers of blind-rsa-signatures.
 /// Key parsing, key generation and blind signing do not depend on the hash function, the salt mode and the message preparation,
@@ -106,7 +117,12 @@ impl RsaPublicKey {
   /// Export jwk public key
   pub fn to_jwk(&self) -> Result<serde_json::Value> {
     let kid = self.key_id()?;
-    let jwk = JsonWebKey::from(self.inner.as_ref());
+    let key = self.inner.as_ref();
+    let jwk = RsaJwk {
+      kty: JWK_KEY_TYPE_RSA.to_string(),
+      n: general_purpose::URL_SAFE_NO_PAD.encode(key.n().to_be_bytes_trimmed_vartime()),
+      e: general_purpose::URL_SAFE_NO_PAD.encode(key.e().to_be_bytes_trimmed_vartime()),
+    };
 
     let mut jwk = serde_json::to_value(jwk)?;
     jwk["kid"] = serde_json::Value::String(kid);
@@ -115,20 +131,21 @@ impl RsaPublicKey {
   /// Import jwk public key
   pub fn from_jwk(jwk: &serde_json::Value) -> Result<Self> {
     // let kid = jwk["kid"].as_str().ok_or_else(|| anyhow!("missing kid"))?;
-    let jwk_parsed: JsonWebKey<'_> = serde_json::from_value(jwk.clone())?;
-    match &jwk_parsed {
-      JsonWebKey::Rsa { private_parts: None, .. } => {
-        let inner = rsa::RsaPublicKey::try_from(&jwk_parsed)?;
-        // Import via DER to check the RSA parameters (modulus size and public exponent) by blind-rsa-signatures
-        let doc = inner.to_pkcs1_der()?;
-        let inner = InnerPublicKey::from_der(doc.as_bytes())?;
-        Ok(Self { inner })
-      }
-      JsonWebKey::Rsa {
-        private_parts: Some(_), ..
-      } => bail!("private key parts found in jwk"),
-      _ => bail!("unsupported key type"),
-    }
+    ensure!(jwk["kty"] == JWK_KEY_TYPE_RSA, "unsupported key type");
+    // `d` is required for RSA private keys (RFC 7518 Section 6.3.2)
+    ensure!(jwk.get("d").is_none(), "private key parts found in jwk");
+    let jwk_parsed: RsaJwk = serde_json::from_value(jwk.clone())?;
+
+    let n = general_purpose::URL_SAFE_NO_PAD.decode(&jwk_parsed.n)?;
+    let e = general_purpose::URL_SAFE_NO_PAD.decode(&jwk_parsed.e)?;
+    let n = BoxedUint::from_be_slice_vartime(&n);
+    let e = BoxedUint::from_be_slice(&e, rsa::RsaPublicKey::MAX_PUB_EXPONENT.ilog2() + 1)
+      .map_err(|e| anyhow::anyhow!("invalid public exponent: {e}"))?;
+    let inner = rsa::RsaPublicKey::new(n, e)?;
+    // Import via DER to check the RSA parameters (modulus size and public exponent) by blind-rsa-signatures
+    let doc = inner.to_pkcs1_der()?;
+    let inner = InnerPublicKey::from_der(doc.as_bytes())?;
+    Ok(Self { inner })
   }
   /// Create key id
   pub fn key_id(&self) -> Result<String> {
@@ -480,6 +497,42 @@ y7MrHkPEJgI1F3dSiAmbJbECAwEAAQ==
     let anonymous_token = AnonymousToken::try_from_base64url(&base64url_anonymous_token).unwrap();
     let res = pk.verify(&anonymous_token);
     assert!(res.is_ok());
+  }
+
+  #[test]
+  fn test_jwk() {
+    let pk = RsaPrivateKey::from_pem(RSA4096_PRIVATE_KEY).unwrap().to_public_key();
+    let jwk = pk.to_jwk().unwrap();
+    assert_eq!(jwk["kty"], "RSA");
+    assert_eq!(jwk["e"], "AQAB");
+    assert_eq!(jwk["kid"], pk.key_id().unwrap().as_str());
+    // 4096-bit modulus without leading zeros
+    let n = general_purpose::URL_SAFE_NO_PAD.decode(jwk["n"].as_str().unwrap()).unwrap();
+    assert_eq!(n.len(), 512);
+    assert_ne!(n[0], 0);
+    assert!(RsaPublicKey::from_jwk(&jwk).unwrap() == pk);
+
+    let modified = |name: &str, value: serde_json::Value| {
+      let mut modified = jwk.clone();
+      modified[name] = value;
+      modified
+    };
+    let invalid_jwks = [
+      // Private key parts
+      modified("d", jwk["n"].clone()),
+      // Other key types
+      modified("kty", "EC".into()),
+      modified("kty", serde_json::Value::Null),
+      // Too small modulus to be accepted by blind-rsa-signatures
+      modified("n", general_purpose::URL_SAFE_NO_PAD.encode(&n[..128]).into()),
+      // Too large public exponent
+      modified("e", general_purpose::URL_SAFE_NO_PAD.encode([1u8; 8]).into()),
+      // Invalid base64url
+      modified("e", "AQAB=".into()),
+    ];
+    for invalid_jwk in invalid_jwks.iter() {
+      assert!(RsaPublicKey::from_jwk(invalid_jwk).is_err(), "{invalid_jwk}");
+    }
   }
 
   #[test]

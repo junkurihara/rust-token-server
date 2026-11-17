@@ -13,16 +13,8 @@ publish = false
 [dependencies]
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
 serde_json = "1.0.154"
-# Use the master branch since crates.io releases (0.8.0 and 0.9.0-beta.1) are left outdated and still depend on old crypto crates (e.g., rsa 0.9).
-# The master depends on the same generation of crypto crates as blind-rsa-signatures (rsa 0.10.0-rc.19).
-# Pin the commit for reproducibility since Cargo.lock is not tracked.
-jwt-compact = { git = "https://github.com/slowli/jwt-compact", rev = "6b410eeff261738123d6993388183fde66df5e26", features = [
-  "p256",
-  "ed25519-compact",
-  "rsa",             # for blind-rsa-signatures
-] }
 anyhow = "1.0.104"
-chrono = { version = "0.4.45", default-features = false }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 validator = { version = "0.21.0", features = ["derive"] }
 rand = "0.10.4"
 base64 = "0.23.1"
@@ -31,10 +23,11 @@ pkcs8 = { version = "0.11.0", default-features = false, features = ["pem"] }
 spki = { version = "0.8.1", default-features = false, features = ["pem"] }
 sec1 = { version = "0.8.1", default-features = false, features = ["der"] }
 ed25519-compact = "2.6.1"
+p256 = { version = "0.14.0", default-features = false, features = ["ecdsa"] }
 sha2 = "0.11.1"
 # Blind rsa signatures RFC9474 to issue anonymized token
 blind-rsa-signatures = { version = "0.18.0", optional = true }
-# rsa is used to convert keys from/to JsonWebKey of jwt-compact, and shared with blind-rsa-signatures.
+# rsa is used to convert keys from/to JWK, and shared with blind-rsa-signatures.
 # Pinned since blind-rsa-signatures 0.18.0 requires rsa ^0.10.0-rc.18, but compiles only with rsa 0.10.0-rc.19.
 rsa = { version = "=0.10.0-rc.19", optional = true }
 

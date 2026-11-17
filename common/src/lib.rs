@@ -7,6 +7,7 @@ mod validation_key;
 #[cfg(feature = "blind-signatures")]
 mod rsa_blind;
 
+pub mod jwt;
 pub mod token_fields;
 
 #[cfg(feature = "blind-signatures")]

@@ -1,11 +1,11 @@
 use crate::{
+  jwt::UntrustedToken,
   token_fields::*,
   validation_key::{Claims, ValidationKey, ValidationOptions},
 };
 use anyhow::{anyhow, bail, Result};
 use base64::Engine;
 use chrono::{DateTime, TimeZone, Utc};
-use jwt_compact::{self, UntrustedToken};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -32,9 +32,9 @@ pub struct TokenBody {
 
 impl TokenBody {
   /// Decode id token and retrieve metadata
-  pub fn decode_id_token(&self) -> Result<UntrustedToken<'_>> {
+  pub fn decode_id_token(&self) -> Result<UntrustedToken> {
     // Token::decode_metadata(&self.id).map_err(|e| AuthError::FailedToDecodeIdToken(e).into())
-    Ok(UntrustedToken::new(self.id.as_str())?)
+    UntrustedToken::new(self.id.as_str())
   }
 
   /// Verify id token with key string
