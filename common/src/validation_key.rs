@@ -1,12 +1,16 @@
-use crate::{claim::CustomClaims, constants::JWT_DURATION_MINS, token::TokenBody, token_fields::*};
-use anyhow::{Result, anyhow, bail, ensure};
-use chrono::{DateTime, Duration, Utc};
-use jwt_compact::{
-  Algorithm, AlgorithmExt, Header, TimeOptions, UntrustedToken,
-  alg::{Ed25519, Es256, VerifyingKey},
-  jwk::JsonWebKey,
+use crate::{
+  claim::CustomClaims,
+  constants::JWT_DURATION_MINS,
+  jwt::{self, Header, TimeOptions, UntrustedToken},
+  token::TokenBody,
+  token_fields::*,
 };
-use pkcs8::{Document, PrivateKeyInfoRef, der::Decode};
+use anyhow::{anyhow, bail, ensure, Result};
+use base64::{engine::general_purpose, Engine as _};
+use chrono::{DateTime, Duration, Utc};
+use p256::ecdsa::signature::{Signer, Verifier};
+use pkcs8::{der::Decode, Document, PrivateKeyInfoRef};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spki::SubjectPublicKeyInfoRef;
 use std::collections::HashSet;
@@ -26,15 +30,56 @@ mod params_oids {
   // Example parameters value: OID for the NIST P-256 elliptic curve.
   pub const Prime256v1: &str = "1.2.840.10045.3.1.7";
 }
+#[allow(non_upper_case_globals)]
+/// Algorithm names in JWS header
+mod jws_algorithms {
+  /// ECDSA using P-256 and SHA-256
+  pub const ES256: &str = "ES256";
+  /// EdDSA, which is Ed25519 here
+  pub const EdDSA: &str = "EdDSA";
+}
+#[allow(non_upper_case_globals)]
+/// Parameters of JWK
+mod jwk_params {
+  /// Curve name of P-256 for key type `EC`
+  pub const P256: &str = "P-256";
+  /// Byte length of the coordinates of P-256
+  pub const P256_COORDINATE_LEN: usize = 32;
+  /// Curve name of Ed25519 for key type `OKP`
+  pub const Ed25519: &str = "Ed25519";
+}
+/// Tag of the uncompressed point in SEC1 encoding
+const SEC1_UNCOMPRESSED_TAG: u8 = 0x04;
 
 pub type JWTClaims = serde_json::Map<String, serde_json::Value>;
-pub type Claims = jwt_compact::Claims<JWTClaims>;
+pub type Claims = jwt::Claims<JWTClaims>;
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "kty")]
+/// Public key in JWK (RFC 7517) for validation keys, where unsupported parameters such as `kid` are ignored in parsing
+enum Jwk {
+  #[serde(rename = "EC")]
+  EllipticCurve { crv: String, x: String, y: String },
+  #[serde(rename = "OKP")]
+  KeyPair { crv: String, x: String },
+  #[serde(other)]
+  Unsupported,
+}
+
+/// Decode a base64url-encoded parameter of JWK and check its byte length
+fn decode_jwk_param(name: &str, value: &str, len: usize) -> Result<Vec<u8>> {
+  let bytes = general_purpose::URL_SAFE_NO_PAD
+    .decode(value)
+    .map_err(|e| anyhow!("Invalid JWK parameter `{name}`: {e}"))?;
+  ensure!(bytes.len() == len, "Invalid length of JWK parameter `{name}`");
+  Ok(bytes)
+}
 
 /* -------------------------------- */
 /// Signing key for JWT
 pub enum SigningKey {
-  Es256(<Es256 as Algorithm>::SigningKey),
-  Ed25519(<Ed25519 as Algorithm>::SigningKey),
+  Es256(p256::ecdsa::SigningKey),
+  Ed25519(ed25519_compact::SecretKey),
 }
 
 impl SigningKey {
@@ -58,7 +103,7 @@ impl SigningKey {
             let private_key = sec1::EcPrivateKey::try_from(pki.private_key.as_bytes())
               .map_err(|e| anyhow!("Error decoding EcPrivateKey: {e}"))?
               .private_key;
-            type SecretKey = <Es256 as Algorithm>::SigningKey;
+            type SecretKey = p256::ecdsa::SigningKey;
             let inner = SecretKey::from_slice(private_key).map_err(|e| anyhow!("Error decoding private key: {}", e))?;
             Ok(Self::Es256(inner))
           }
@@ -68,7 +113,7 @@ impl SigningKey {
       // ed25519
       algorithm_oids::Ed25519 => {
         debug!("Read Ed25519 private key");
-        type SecretKey = <Ed25519 as Algorithm>::SigningKey;
+        type SecretKey = ed25519_compact::SecretKey;
         let mut seed = [0u8; 32];
         seed.copy_from_slice(&pki.private_key.as_bytes()[2..]);
         let sk = ed25519_compact::KeyPair::from_seed(ed25519_compact::Seed::new(seed))
@@ -97,19 +142,28 @@ impl SigningKey {
       is_admin,
     };
     let time_options = TimeOptions::default();
-    let claims = jwt_compact::Claims::new(custom_claims)
+    let claims = jwt::Claims::new(custom_claims)
       .set_duration_and_issuance(&time_options, Duration::minutes(JWT_DURATION_MINS as i64))
       .set_not_before(Utc::now() - Duration::minutes(10));
-    let key_id = self.validation_key().key_id();
-    let header = Header::empty().with_key_id(key_id);
-    let id_token = match self {
-      Self::Es256(key) => Es256.token(&header, &claims, key),
-      Self::Ed25519(key) => Ed25519.token(&header, &claims, key),
-    }
-    .map(IdToken::new)??;
+    let validation_key = self.validation_key();
+    let header = Header::new(validation_key.algorithm()).with_key_id(validation_key.key_id());
+    let id_token = jwt::encode(&header, &claims, |message| self.sign(message)).map(IdToken::new)??;
     info!("[{}] Issued a JWT: {}", subscriber_id.as_str(), id_token.as_str());
 
     TokenBody::new(&id_token, refresh_required)
+  }
+
+  /// Sign the message and return the signature in the format of JWS
+  fn sign(&self, message: &[u8]) -> Result<Vec<u8>> {
+    match self {
+      // The message is hashed with SHA-256, and the signature is the 64-byte concatenation of r and s
+      Self::Es256(key) => {
+        let signature: p256::ecdsa::Signature = key.try_sign(message).map_err(|e| anyhow!("Failed to sign JWT: {e}"))?;
+        Ok(signature.to_bytes().to_vec())
+      }
+      // Hedged signature with random noise, as jwt-compact did
+      Self::Ed25519(key) => Ok(key.sign(message, Some(ed25519_compact::Noise::generate())).to_vec()),
+    }
   }
 
   /// Validate JWT using the validation key derived from this signing key
@@ -139,8 +193,8 @@ impl SigningKey {
 /* -------------------------------- */
 /// Validation key for JWT
 pub enum ValidationKey {
-  Es256(<Es256 as Algorithm>::VerifyingKey),
-  Ed25519(<Ed25519 as Algorithm>::VerifyingKey),
+  Es256(p256::ecdsa::VerifyingKey),
+  Ed25519(ed25519_compact::PublicKey),
 }
 
 /// Validation options
@@ -180,8 +234,8 @@ impl ValidationKey {
           // prime256v1 = es256
           params_oids::Prime256v1 => {
             let public_key = spki_ref.subject_public_key.as_bytes().ok_or(anyhow!("Invalid public key"))?;
-            type PublicKey = <Es256 as Algorithm>::VerifyingKey;
-            let inner = PublicKey::from_slice(public_key)?;
+            type PublicKey = p256::ecdsa::VerifyingKey;
+            let inner = PublicKey::from_sec1_bytes(public_key)?;
             Ok(Self::Es256(inner))
           }
           _ => bail!("Unsupported curve"),
@@ -190,7 +244,7 @@ impl ValidationKey {
       // ed25519
       algorithm_oids::Ed25519 => {
         let public_key = spki_ref.subject_public_key.as_bytes().ok_or(anyhow!("Invalid public key"))?;
-        type PublicKey = <Ed25519 as Algorithm>::VerifyingKey;
+        type PublicKey = ed25519_compact::PublicKey;
         let inner = PublicKey::from_slice(public_key)?;
         Ok(Self::Ed25519(inner))
       }
@@ -199,26 +253,32 @@ impl ValidationKey {
   }
   /// Convert from jwk
   pub fn from_jwk(jwk: &serde_json::Value) -> Result<Self> {
-    let jwk_parsed: JsonWebKey<'_> = serde_json::from_value(jwk.clone())?;
+    let jwk_parsed: Jwk = serde_json::from_value(jwk.clone())?;
 
     match &jwk_parsed {
-      JsonWebKey::EllipticCurve { curve, .. } => match curve.as_ref() {
-        "P-256" => {
-          type PublicKey = <Es256 as Algorithm>::VerifyingKey;
-          let inner = PublicKey::try_from(&jwk_parsed)?;
+      Jwk::EllipticCurve { crv, x, y } => match crv.as_ref() {
+        jwk_params::P256 => {
+          let x = decode_jwk_param("x", x, jwk_params::P256_COORDINATE_LEN)?;
+          let y = decode_jwk_param("y", y, jwk_params::P256_COORDINATE_LEN)?;
+          let mut sec1_bytes = vec![SEC1_UNCOMPRESSED_TAG];
+          sec1_bytes.extend_from_slice(&x);
+          sec1_bytes.extend_from_slice(&y);
+          type PublicKey = p256::ecdsa::VerifyingKey;
+          let inner = PublicKey::from_sec1_bytes(&sec1_bytes)?;
           Ok(Self::Es256(inner))
         }
         _ => bail!("Unsupported curve"),
       },
-      JsonWebKey::KeyPair { curve, .. } => match curve.as_ref() {
-        "Ed25519" => {
-          type PublicKey = <Ed25519 as Algorithm>::VerifyingKey;
-          let inner = PublicKey::try_from(&jwk_parsed)?;
+      Jwk::KeyPair { crv, x } => match crv.as_ref() {
+        jwk_params::Ed25519 => {
+          type PublicKey = ed25519_compact::PublicKey;
+          let x = decode_jwk_param("x", x, PublicKey::BYTES)?;
+          let inner = PublicKey::from_slice(&x)?;
           Ok(Self::Ed25519(inner))
         }
         _ => bail!("Unsupported curve"),
       },
-      _ => bail!("Unsupported key type"),
+      Jwk::Unsupported => bail!("Unsupported key type"),
     }
   }
 
@@ -226,8 +286,21 @@ impl ValidationKey {
   pub fn to_jwk(&self) -> Result<serde_json::Value> {
     let kid = self.key_id();
     let jwk = match self {
-      Self::Es256(vk) => JsonWebKey::from(vk),
-      Self::Ed25519(vk) => JsonWebKey::from(vk),
+      Self::Es256(vk) => {
+        let point = vk.to_sec1_point(false);
+        let (Some(x), Some(y)) = (point.x(), point.y()) else {
+          bail!("Invalid public key");
+        };
+        Jwk::EllipticCurve {
+          crv: jwk_params::P256.to_string(),
+          x: general_purpose::URL_SAFE_NO_PAD.encode(x),
+          y: general_purpose::URL_SAFE_NO_PAD.encode(y),
+        }
+      }
+      Self::Ed25519(vk) => Jwk::KeyPair {
+        crv: jwk_params::Ed25519.to_string(),
+        x: general_purpose::URL_SAFE_NO_PAD.encode(vk.as_ref()),
+      },
     };
     let mut jwk = serde_json::to_value(jwk)?;
     jwk["kid"] = serde_json::Value::String(kid);
@@ -235,8 +308,6 @@ impl ValidationKey {
   }
   /// Create key id
   pub fn key_id(&self) -> String {
-    use base64::{Engine as _, engine::general_purpose};
-
     let bytes = match self {
       Self::Es256(vk) => vk.to_sec1_point(true).as_bytes().to_vec(),
       Self::Ed25519(vk) => vk.as_ref().to_vec(),
@@ -247,6 +318,34 @@ impl ValidationKey {
     general_purpose::URL_SAFE_NO_PAD.encode(hash)
   }
 
+  /// Algorithm name in JWS header
+  fn algorithm(&self) -> &'static str {
+    match self {
+      Self::Es256(_) => jws_algorithms::ES256,
+      Self::Ed25519(_) => jws_algorithms::EdDSA,
+    }
+  }
+
+  /// Verify the signature in the format of JWS for the message
+  fn verify_signature(&self, message: &[u8], signature: &[u8]) -> Result<()> {
+    match self {
+      // The message is hashed with SHA-256, and the signature is the 64-byte concatenation of r and s
+      Self::Es256(key) => {
+        let signature = p256::ecdsa::Signature::from_slice(signature).map_err(|e| anyhow!("Malformed signature: {e}"))?;
+        key
+          .verify(message, &signature)
+          .map_err(|e| anyhow!("Invalid signature: {e}"))?;
+      }
+      Self::Ed25519(key) => {
+        let signature = ed25519_compact::Signature::from_slice(signature).map_err(|e| anyhow!("Malformed signature: {e}"))?;
+        key
+          .verify(message, &signature)
+          .map_err(|e| anyhow!("Invalid signature: {e}"))?;
+      }
+    }
+    Ok(())
+  }
+
   /// Validate JWT
   pub fn validate<T>(&self, token: &IdToken, opt: &ValidationOptions<T>) -> Result<Claims>
   where
@@ -254,14 +353,17 @@ impl ValidationKey {
   {
     // Parse the token.
     let token = UntrustedToken::new(token.as_str())?;
-    // Verify signature
-    let token = match &self {
-      Self::Es256(key) => Es256.validator::<JWTClaims>(key).validate(&token)?,
-      Self::Ed25519(key) => Ed25519.validator::<JWTClaims>(key).validate(&token)?,
-    };
+    // Verify signature with the algorithm of this key, not trusting the algorithm in the header
+    ensure!(
+      token.algorithm() == self.algorithm(),
+      "Algorithm mismatch: expected {}, actual {}",
+      self.algorithm(),
+      token.algorithm()
+    );
+    self.verify_signature(token.signed_data(), token.signature())?;
+    let claims = token.deserialize_claims::<JWTClaims>()?;
     // validate time
-    let claims = token
-      .claims()
+    claims
       .validate_maturity(&opt.time_options)?
       .validate_expiration(&opt.time_options)?;
     // validate issuer
@@ -303,14 +405,14 @@ impl ValidationKey {
         }
       }
     }
-    Ok(claims.to_owned())
+    Ok(claims)
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use crate::jwt::TimeOptions;
   use chrono::{DateTime, Duration};
-  use jwt_compact::TimeOptions;
 
   use super::*;
 
@@ -424,6 +526,202 @@ mod tests {
       let _res = vk.validate(&IdToken::new(pair.id_token)?, &vo)?;
     }
 
+    Ok(())
+  }
+
+  fn issue_token(sk: &SigningKey) -> Result<IdToken> {
+    let token = sk.authorize(
+      &SubscriberId::new("test_user")?,
+      &ClientId::new("client_id1")?,
+      &Issuer::new("https://auth.example.com/v1.0")?,
+      false,
+      false,
+    )?;
+    Ok(token.id)
+  }
+
+  /// Replace a part of the token, where `index` is 0 for the header, 1 for the claims and 2 for the signature
+  fn replace_part(token: &IdToken, index: usize, decoded_part: &[u8]) -> Result<IdToken> {
+    let encoded_part = general_purpose::URL_SAFE_NO_PAD.encode(decoded_part);
+    let mut parts = token.as_str().split('.').collect::<Vec<_>>();
+    parts[index] = &encoded_part;
+    IdToken::new(parts.join("."))
+  }
+
+  #[test]
+  fn test_jwk_of_signing_keys() -> Result<()> {
+    // Same JWKs as jwt-compact
+    let pairs = [
+      (
+        P256_PRIVATE_KEY,
+        r#"{"crv":"P-256","kid":"k34r3Nqfak67bhJSXTjTRo5tCIr1Bsre1cPoJ3LJ9xE","kty":"EC","x":"RmLDHtAk-qSMqcEb6CZSzbOPnE4dii-31DW-YulmysY","y":"SkCg77pPekwEbljDv7w24ZO--2tkBd24DaCI_FDzMJ8"}"#,
+      ),
+      (
+        EDDSA_PRIVATE_KEY,
+        r#"{"crv":"Ed25519","kid":"gjrE7ACMxgzYfFHgabgf4kLTg1eKIdsJ94AiFTFj1is","kty":"OKP","x":"1ixMQcxO46PLlgQfYS46ivFd-n0CcDHSKUnuhm3i1O0"}"#,
+      ),
+    ];
+
+    for (key, expected_jwk) in pairs {
+      let vk = SigningKey::from_pem(key)?.validation_key();
+      let jwk = vk.to_jwk()?;
+      assert_eq!(jwk, serde_json::from_str::<serde_json::Value>(expected_jwk)?);
+      // `kid` is ignored in parsing
+      let parsed = ValidationKey::from_jwk(&jwk)?;
+      assert_eq!(parsed.key_id(), vk.key_id());
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn test_invalid_jwk() -> Result<()> {
+    let es256_jwk = SigningKey::from_pem(P256_PRIVATE_KEY)?.validation_key().to_jwk()?;
+    let ed25519_jwk = SigningKey::from_pem(EDDSA_PRIVATE_KEY)?.validation_key().to_jwk()?;
+    assert!(ValidationKey::from_jwk(&es256_jwk).is_ok());
+    assert!(ValidationKey::from_jwk(&ed25519_jwk).is_ok());
+
+    let modified = |base: &serde_json::Value, name: &str, value: serde_json::Value| {
+      let mut jwk = base.clone();
+      jwk[name] = value;
+      jwk
+    };
+    let encoded = |bytes: &[u8]| serde_json::Value::String(general_purpose::URL_SAFE_NO_PAD.encode(bytes));
+    let mut y_off_curve = general_purpose::URL_SAFE_NO_PAD.decode(es256_jwk["y"].as_str().unwrap_or_default())?;
+    y_off_curve[31] ^= 1;
+    let mut no_y = es256_jwk.clone();
+    if let Some(jwk) = no_y.as_object_mut() {
+      jwk.remove("y");
+    }
+
+    let invalid_jwks = [
+      // Unsupported key types and curves
+      serde_json::json!({"kty": "oct", "k": "AQAB"}),
+      modified(&es256_jwk, "kty", "RSA".into()),
+      modified(&es256_jwk, "crv", "P-384".into()),
+      modified(&ed25519_jwk, "crv", "X25519".into()),
+      // Missing parameters
+      modified(&es256_jwk, "kty", serde_json::Value::Null),
+      no_y,
+      // Invalid lengths
+      modified(&es256_jwk, "x", encoded(&[0u8; 31])),
+      modified(&es256_jwk, "y", encoded(&[0u8; 33])),
+      modified(&ed25519_jwk, "x", encoded(&[0u8; 33])),
+      // Point not on the curve
+      modified(&es256_jwk, "y", encoded(&y_off_curve)),
+      // Invalid base64url
+      modified(&ed25519_jwk, "x", "1ixMQcxO46PLlgQfYS46ivFd+n0CcDHSKUnuhm3i1O0".into()),
+      modified(&ed25519_jwk, "x", "1ixMQcxO46PLlgQfYS46ivFd-n0CcDHSKUnuhm3i1O0=".into()),
+    ];
+    for jwk in invalid_jwks.iter() {
+      assert!(ValidationKey::from_jwk(jwk).is_err(), "{jwk}");
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn test_invalid_tokens() -> Result<()> {
+    let es256 = SigningKey::from_pem(P256_PRIVATE_KEY)?;
+    let ed25519 = SigningKey::from_pem(EDDSA_PRIVATE_KEY)?;
+    let opts = ValidationOptions::default();
+
+    for (sk, other_sk) in [(&es256, &ed25519), (&ed25519, &es256)] {
+      let vk = sk.validation_key();
+      let other_vk = other_sk.validation_key();
+      let token = issue_token(sk)?;
+      assert!(vk.validate(&token, &opts).is_ok());
+
+      let parts = token
+        .as_str()
+        .split('.')
+        .map(|part| general_purpose::URL_SAFE_NO_PAD.decode(part))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+      let (header, claims, signature) = (&parts[0], &parts[1], &parts[2]);
+
+      // Tampered claims
+      let tampered_claims = String::from_utf8(claims.clone())?.replace(r#""iad":false"#, r#""iad":true"#);
+      assert_ne!(tampered_claims.as_bytes(), claims.as_slice());
+      let tampered = replace_part(&token, 1, tampered_claims.as_bytes())?;
+      assert!(vk.validate(&tampered, &opts).is_err());
+
+      // Tampered signature
+      let mut tampered_signature = signature.clone();
+      tampered_signature[0] ^= 1;
+      assert!(vk.validate(&replace_part(&token, 2, &tampered_signature)?, &opts).is_err());
+
+      // Invalid signature lengths
+      let mut longer_signature = signature.clone();
+      longer_signature.push(0);
+      assert!(vk.validate(&replace_part(&token, 2, &longer_signature)?, &opts).is_err());
+      let shorter_signature = &signature[..signature.len() - 1];
+      assert!(vk.validate(&replace_part(&token, 2, shorter_signature)?, &opts).is_err());
+      assert!(vk.validate(&replace_part(&token, 2, &[])?, &opts).is_err());
+
+      // Tampered header
+      let tampered_header = String::from_utf8(header.clone())?.replace(vk.algorithm(), other_vk.algorithm());
+      assert_ne!(tampered_header.as_bytes(), header.as_slice());
+      assert!(vk
+        .validate(&replace_part(&token, 0, tampered_header.as_bytes())?, &opts)
+        .is_err());
+      let none_header = replace_part(&token, 0, br#"{"alg":"none"}"#)?;
+      assert!(vk.validate(&replace_part(&none_header, 2, &[])?, &opts).is_err());
+
+      // Algorithm in the header must match the key even if the signature is valid
+      let decoded_claims = UntrustedToken::new(token.as_str())?.deserialize_claims::<JWTClaims>()?;
+      let sign_with_header = |alg: &str| -> Result<IdToken> {
+        let header = Header::new(alg).with_key_id(vk.key_id());
+        IdToken::new(jwt::encode(&header, &decoded_claims, |message| sk.sign(message))?)
+      };
+      assert!(vk.validate(&sign_with_header(vk.algorithm())?, &opts).is_ok());
+      for alg in ["none", "HS256", other_vk.algorithm()] {
+        let res = vk.validate(&sign_with_header(alg)?, &opts);
+        assert!(res.is_err_and(|e| e.to_string().starts_with("Algorithm mismatch")));
+      }
+
+      // Key of the other algorithm
+      assert!(other_vk.validate(&token, &opts).is_err());
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn test_time_validation() -> Result<()> {
+    let sk = SigningKey::from_pem(P256_PRIVATE_KEY)?;
+    let vk = sk.validation_key();
+    let token = issue_token(&sk)?;
+    let claims = vk.validate(&token, &ValidationOptions::default())?;
+    let (Some(exp), Some(nbf)) = (claims.expiration, claims.not_before) else {
+      bail!("exp or nbf is missing");
+    };
+
+    let at = |time: DateTime<Utc>| ValidationOptions {
+      time_options: TimeOptions::new(Duration::seconds(60), move || time),
+      allowed_issuers: None,
+      allowed_audiences: None,
+    };
+    assert!(vk.validate(&token, &at(exp + Duration::seconds(60))).is_ok());
+    assert!(vk.validate(&token, &at(exp + Duration::seconds(61))).is_err());
+    assert!(vk.validate(&token, &at(nbf - Duration::seconds(60))).is_ok());
+    assert!(vk.validate(&token, &at(nbf - Duration::seconds(61))).is_err());
+
+    // Both exp and nbf are required
+    let custom_claims = CustomClaims {
+      issuer: Issuer::new("https://auth.example.com/v1.0")?,
+      subscriber_id: SubscriberId::new("test_user")?,
+      audiences: Audiences::new("client_id1")?,
+      is_admin: false,
+    };
+    let header = Header::new(vk.algorithm()).with_key_id(vk.key_id());
+    let sign_claims = |claims: &jwt::Claims<&CustomClaims>| -> Result<IdToken> {
+      IdToken::new(jwt::encode(&header, claims, |message| sk.sign(message))?)
+    };
+    let no_nbf = jwt::Claims::new(&custom_claims).set_duration_and_issuance(&TimeOptions::default(), Duration::minutes(30));
+    let no_exp = jwt::Claims::new(&custom_claims).set_not_before(nbf);
+    let both = no_nbf.clone().set_not_before(nbf);
+    assert!(vk.validate(&sign_claims(&both)?, &ValidationOptions::default()).is_ok());
+    let res = vk.validate(&sign_claims(&no_nbf)?, &ValidationOptions::default());
+    assert!(res.is_err_and(|e| e.to_string() == "No nbf is specified in JWT"));
+    let res = vk.validate(&sign_claims(&no_exp)?, &ValidationOptions::default());
+    assert!(res.is_err_and(|e| e.to_string() == "No exp is specified in JWT"));
     Ok(())
   }
 }
